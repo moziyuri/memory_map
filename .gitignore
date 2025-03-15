@@ -48,4 +48,12 @@ ENV/
 
 # Systémové soubory
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Ostatní projekty
+Kitchenquest*
+Sightquest*
+image_pipeline.py
+tensorflow_config.py
+models/
+detection_logs/ 
