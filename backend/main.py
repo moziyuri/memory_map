@@ -1,3 +1,19 @@
+"""
+MemoryMap Backend API
+
+Tento modul poskytuje REST API pro aplikaci MemoryMap, která umožňuje ukládání a správu
+geograficky umístěných vzpomínek. Součást projektu vytvořeného pro demonstraci
+technických dovedností při přípravě na pohovor.
+
+Hlavní funkce:
+- Správa vzpomínek s geografickou lokací
+- Zpracování hlasových nahrávek pomocí Whisper AI
+- Fulltextové vyhledávání ve vzpomínkách
+- Prostorové dotazy pro okolní místa
+
+Autor: Vytvořeno jako ukázka dovedností pro pohovor
+"""
+
 from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import spacy  # Knihovna pro zpracování přirozeného jazyka

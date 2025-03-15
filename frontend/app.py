@@ -1,3 +1,19 @@
+"""
+MemoryMap - Interaktivní Mapa Vzpomínek
+
+Streamlit aplikace pro vizualizaci a správu geograficky umístěných vzpomínek.
+Součást projektu vytvořeného pro demonstraci technických dovedností při přípravě
+na pohovor.
+
+Funkce:
+- Interaktivní mapa pro zobrazení vzpomínek
+- Nahrávání hlasových záznamů
+- Vyhledávání ve vzpomínkách
+- Vizualizace okolních míst
+
+Autor: Vytvořeno jako ukázka dovedností pro pohovor.
+"""
+
 import streamlit as st  # Knihovna pro tvorbu webových aplikací
 import folium  # Knihovna pro práci s mapami
 import requests  # Knihovna pro HTTP požadavky
