@@ -59,19 +59,22 @@ def get_db():
         raise HTTPException(status_code=500, detail="Database configuration missing")
     
     try:
-        # Úprava URL pro PostgreSQL
+        # Úprava URL pro psycopg2 (pokud používá formát postgres://)
         if DATABASE_URL.startswith('postgres://'):
             DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
         
-        print(f"Connecting to database with URL: {DATABASE_URL}")
-        conn = None
+        # Logging pro diagnostiku
+        print(f"Connecting to database...")
+        
+        # Přímé použití connection stringu
+        conn = psycopg2.connect(DATABASE_URL)
+        
+        # Vrácení spojení ke konzumaci
         try:
-            conn = psycopg2.connect(DATABASE_URL)
             yield conn
         finally:
-            if conn is not None:
-                conn.close()
-                print("Database connection closed")
+            conn.close()
+            
     except Exception as e:
         print(f"Database connection error: {str(e)}")
         raise HTTPException(

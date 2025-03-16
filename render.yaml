@@ -4,7 +4,7 @@ services:
     env: python
     buildCommand: |
       pip install -r backend/requirements.txt
-      python backend/init_render_db.py
+      python backend/init_db_render.py
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
