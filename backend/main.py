@@ -22,6 +22,7 @@ import os
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 import json
+import time
 
 load_dotenv()
 
@@ -35,7 +36,8 @@ app.add_middleware(
         "https://stanislavhoracekmemorymap.streamlit.app",
         "http://localhost:8501",  # Pro lokální vývoj
         "https://localhost:8501",
-        "https://memorymap-api.onrender.com"  # Render.com URL
+        "https://memory-map.onrender.com",  # Správná Render.com URL
+        "https://memorymap-api.onrender.com"  # Ponecháme pro případ
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -57,17 +59,33 @@ def get_db():
         raise HTTPException(status_code=500, detail="Database configuration missing")
     
     try:
-        # Úprava URL pro Railway PostgreSQL
+        # Úprava URL pro PostgreSQL
         if DATABASE_URL.startswith('postgres://'):
             DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
         
-        conn = psycopg2.connect(DATABASE_URL)
-        try:
-            yield conn
-        finally:
-            conn.close()
+        # Několik pokusů o připojení
+        max_retries = 3
+        last_exception = None
+        
+        for attempt in range(max_retries):
+            try:
+                conn = psycopg2.connect(
+                    DATABASE_URL,
+                    connect_timeout=10  # Timeout pro připojení
+                )
+                return conn
+            except Exception as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    time.sleep(1)  # Krátká pauza před dalším pokusem
+        
+        # Pokud všechny pokusy selžou
+        raise last_exception
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database connection failed: {str(e)}"
+        )
 
 # Základní endpoint pro kontrolu, zda API běží
 @app.get("/")
