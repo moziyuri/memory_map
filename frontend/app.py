@@ -235,16 +235,16 @@ def get_memories():
     """Získání všech vzpomínek z API"""
     try:
         # Odeslání GET požadavku na backend API
-        st.write(f"Pokouším se o připojení k: {BACKEND_URL}/api/memories")
+        print(f"Pokouším se o připojení k: {BACKEND_URL}/api/memories")
         response = requests.get(f"{BACKEND_URL}/api/memories", timeout=10)
-        st.write(f"Status odpovědi: {response.status_code}")
+        print(f"Status odpovědi: {response.status_code}")
         
         if response.status_code == 200:
             # Pokud byl požadavek úspěšný, vrátíme data
             data = response.json()
-            st.write(f"Získáno {len(data)} záznamů")
+            print(f"Získáno {len(data)} záznamů")
             if len(data) > 0:
-                st.write(f"První záznam obsahuje klíče: {list(data[0].keys())}")
+                print(f"První záznam obsahuje klíče: {list(data[0].keys())}")
             return data
         else:
             # Pokud nastal problém, zobrazíme chybovou zprávu
@@ -348,7 +348,10 @@ tab1, tab2 = st.tabs(["📍 Mapa vzpomínek", "ℹ️ O aplikaci"])
 
 with tab1:
     # Mapa
-    st.markdown('<div class="tooltip">🗺️ Interaktivní mapa<span class="tooltiptext">Klikněte na mapu pro přidání nové vzpomínky nebo na pin pro zobrazení detailu</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tooltip">📍 Mapa vzpomínek<span class="tooltiptext">Klikněte na mapu pro přidání nové vzpomínky nebo na pin pro zobrazení detailu</span></div>', unsafe_allow_html=True)
+    
+    # Poznámka o AI-generovaných vzpomínkách
+    st.caption("💡 Poznámka: Vzpomínky zobrazené na mapě byly vygenerovány pomocí umělé inteligence pro demonstrační účely.")
     
     # Získání vzpomínek
     memories = get_memories()
