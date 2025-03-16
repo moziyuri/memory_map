@@ -434,6 +434,136 @@ async def debug_info():
         }
     }
 
+@app.get("/api/diagnostic")
+async def diagnostic():
+    """
+    Diagnostický endpoint pro ověření funkčnosti API a stavu databáze.
+    Vrací detailní informace o:
+    - Stavu připojení k databázi
+    - Počtu vzpomínek v databázi
+    - Struktuře dat vzpomínek
+    - Verzi PostGIS
+    """
+    conn = None
+    result = {
+        "status": "initializing",
+        "api_version": "1.0.0",
+        "timestamp": time.time(),
+        "database": {
+            "connected": False,
+            "tables": [],
+            "postgis_version": None,
+            "memories_count": 0,
+            "sample_memory": None
+        },
+        "errors": []
+    }
+    
+    try:
+        # Připojení k databázi
+        conn = next(get_db())
+        result["database"]["connected"] = True
+        result["status"] = "connected_to_db"
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Získání seznamu tabulek
+            cur.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """)
+            tables = [row["table_name"] for row in cur.fetchall()]
+            result["database"]["tables"] = tables
+            
+            # Kontrola existence tabulky memories
+            memories_exists = "memories" in tables
+            result["database"]["memories_table_exists"] = memories_exists
+            
+            # Kontrola PostGIS verze
+            try:
+                cur.execute("SELECT PostGIS_Version()")
+                postgis_version = cur.fetchone()
+                result["database"]["postgis_version"] = postgis_version["postgis_version"] if postgis_version else None
+            except Exception as e:
+                result["database"]["postgis_version"] = "not_installed"
+                result["errors"].append(f"PostGIS error: {str(e)}")
+            
+            # Pokud tabulka memories existuje, získáme počet vzpomínek a ukázku
+            if memories_exists:
+                try:
+                    # Počet vzpomínek
+                    cur.execute("SELECT COUNT(*) as count FROM memories")
+                    count = cur.fetchone()
+                    result["database"]["memories_count"] = count["count"] if count else 0
+                    
+                    # Vzorová vzpomínka s kompletními daty (pokud existuje)
+                    if result["database"]["memories_count"] > 0:
+                        cur.execute("""
+                            SELECT id, text, location, keywords, source, date, coordinates,
+                                   ST_X(coordinates::geometry) as longitude, 
+                                   ST_Y(coordinates::geometry) as latitude,
+                                   created_at
+                            FROM memories
+                            ORDER BY created_at DESC
+                            LIMIT 1
+                        """)
+                        sample = cur.fetchone()
+                        
+                        # Převedeme na slovník pro JSON výstup
+                        if sample:
+                            memory_dict = dict(sample)
+                            # Převod PostgreSQL specifických typů na string pro JSON výstup
+                            memory_dict["coordinates"] = str(memory_dict["coordinates"])
+                            memory_dict["created_at"] = str(memory_dict["created_at"])
+                            result["database"]["sample_memory"] = memory_dict
+                except Exception as e:
+                    result["errors"].append(f"Error querying memories: {str(e)}")
+        
+        # Přidáme informace o databázovém URL (bezpečně maskované)
+        db_url = os.getenv('DATABASE_URL', 'not set')
+        if db_url != 'not set':
+            # Maskujeme citlivé části
+            masked_url = mask_db_url(db_url)
+            result["database"]["connection_string"] = masked_url
+        
+        # Pokud nejsou žádné chyby, označíme jako úspěšné
+        if not result["errors"]:
+            result["status"] = "healthy"
+        
+    except Exception as e:
+        result["status"] = "error"
+        result["errors"].append(str(e))
+    finally:
+        if conn:
+            conn.close()
+    
+    return result
+
+def mask_db_url(url):
+    """Maskuje citlivé části databázového URL"""
+    if not url:
+        return None
+    
+    try:
+        # PostgreSQL URI formát: postgresql://user:password@host:port/database
+        parts = url.split('@')
+        if len(parts) > 1:
+            # Máme uživatelské jméno/heslo část
+            credentials = parts[0].split('://')
+            if len(credentials) > 1:
+                protocol = credentials[0]
+                user_pass = credentials[1].split(':')
+                if len(user_pass) > 1:
+                    # Maskujeme heslo
+                    masked_url = f"{protocol}://{user_pass[0]}:****@{parts[1]}"
+                    return masked_url
+        
+        # Pokud se formát neshoduje s očekávaným, vracíme obecné maskování
+        return url.replace('postgres://', 'postgres://****:****@')
+    except:
+        # V případě problému s parsováním vracíme bezpečnou verzi
+        return "database_url_format_error"
+
 # Spuštění aplikace, pokud je tento soubor spuštěn přímo
 if __name__ == "__main__":
     import uvicorn

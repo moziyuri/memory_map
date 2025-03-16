@@ -133,31 +133,79 @@ def create_map(memories, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON):
     if not memories:
         return m
     
-    for memory in memories:
-        # Vylepšené pop-up okno s lepším formátováním
-        popup_content = f"""
-        <div style='width: 300px; padding: 10px; font-family: Arial, sans-serif;'>
-            <h3 style='color: #1E88E5; margin-top: 0;'>{memory['location']}</h3>
-            <div style='background-color: #f5f5f5; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>
-                {memory['text']}
+    # Logujeme počet vzpomínek pro diagnostiku
+    st.write(f"Funkce create_map: Zpracovávám {len(memories)} vzpomínek")
+    
+    # Zkusíme vypsat přehled klíčů první vzpomínky pro diagnostiku
+    if len(memories) > 0:
+        st.write(f"Klíče v první vzpomínce: {list(memories[0].keys())}")
+    
+    for i, memory in enumerate(memories):
+        try:
+            # Kontrola klíčových atributů
+            if not all(key in memory for key in ["latitude", "longitude", "location"]):
+                # Pokud chybí klíčové atributy, zkusíme alternativní formát
+                if "coordinates" in memory:
+                    # Pokud máme souřadnice ve formátu "coordinates", zkusíme je rozdělit
+                    coords_str = memory.get("coordinates", "")
+                    # Typické formáty: POINT(15.123 49.456) nebo geografický objekt
+                    if isinstance(coords_str, str) and "POINT" in coords_str:
+                        # Extrahujeme souřadnice z POINT(lon lat)
+                        coords = coords_str.replace("POINT(", "").replace(")", "").split()
+                        if len(coords) >= 2:
+                            memory["longitude"] = float(coords[0])
+                            memory["latitude"] = float(coords[1])
+                    elif isinstance(coords_str, dict) and "coordinates" in coords_str:
+                        # GeoJSON formát
+                        memory["longitude"] = coords_str["coordinates"][0]
+                        memory["latitude"] = coords_str["coordinates"][1]
+                else:
+                    st.warning(f"Vzpomínka {i+1} nemá potřebné souřadnice: {memory}")
+                    continue
+            
+            # Získáme souřadnice - upravujeme pro flexibilnější zpracování
+            lat = float(memory.get("latitude", 0))
+            lon = float(memory.get("longitude", 0))
+            
+            # Kontrola, že souřadnice jsou v rozumném rozsahu
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                st.warning(f"Vzpomínka {i+1} má neplatné souřadnice: lat={lat}, lon={lon}")
+                continue
+            
+            # Bezpečné získání dat s fallbacky pro chybějící
+            location = memory.get("location", "Neznámé místo")
+            text = memory.get("text", "Bez textu")
+            keywords = memory.get("keywords", [])
+            if not isinstance(keywords, list):
+                keywords = []
+            
+            # Vylepšené pop-up okno s lepším formátováním a ošetřením chybějících hodnot
+            popup_content = f"""
+            <div style='width: 300px; padding: 10px; font-family: Arial, sans-serif;'>
+                <h3 style='color: #1E88E5; margin-top: 0;'>{location}</h3>
+                <div style='background-color: #f5f5f5; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>
+                    {text}
+                </div>
+                <div style='margin-top: 10px;'>
+                    <p style='margin: 5px 0;'><strong style='color: #0D47A1;'>Klíčová slova:</strong> 
+                       <span style='background-color: #E3F2FD; padding: 2px 5px; border-radius: 3px;'>{', '.join(keywords)}</span>
+                    </p>
+                    <p style='margin: 5px 0;'><strong style='color: #0D47A1;'>Datum:</strong> {memory.get('date', 'Neuvedeno')}</p>
+                    <p style='margin: 5px 0;'><strong style='color: #0D47A1;'>Vytvořeno:</strong> {memory.get('created_at', 'Neznámé datum')}</p>
+                </div>
             </div>
-            <div style='margin-top: 10px;'>
-                <p style='margin: 5px 0;'><strong style='color: #0D47A1;'>Klíčová slova:</strong> 
-                   <span style='background-color: #E3F2FD; padding: 2px 5px; border-radius: 3px;'>{', '.join(memory['keywords'])}</span>
-                </p>
-                <p style='margin: 5px 0;'><strong style='color: #0D47A1;'>Datum:</strong> {memory.get('date', 'Neuvedeno')}</p>
-                <p style='margin: 5px 0;'><strong style='color: #0D47A1;'>Vytvořeno:</strong> {memory.get('created_at', 'Neznámé datum')}</p>
-            </div>
-        </div>
-        """
-        
-        # Použití výraznějšího pinu (FontAwesome ikona map-pin místo bookmark)
-        folium.Marker(
-            [memory["latitude"], memory["longitude"]],
-            popup=folium.Popup(popup_content, max_width=300),
-            tooltip=memory["location"],
-            icon=folium.Icon(icon="map-pin", prefix="fa", color="blue")
-        ).add_to(m)
+            """
+            
+            # Použití výraznějšího pinu (FontAwesome ikona map-pin místo bookmark)
+            folium.Marker(
+                [lat, lon],
+                popup=folium.Popup(popup_content, max_width=300),
+                tooltip=location,
+                icon=folium.Icon(icon="map-pin", prefix="fa", color="blue")
+            ).add_to(m)
+            
+        except Exception as e:
+            st.error(f"Chyba při zpracování vzpomínky {i+1}: {str(e)}")
     
     # Přidání click handleru pro přidání nové vzpomínky s jasnějším popisem
     m.add_child(folium.ClickForMarker(popup="Klikněte zde pro přidání nové vzpomínky"))
@@ -187,13 +235,24 @@ def get_memories():
     """Získání všech vzpomínek z API"""
     try:
         # Odeslání GET požadavku na backend API
-        response = requests.get(f"{BACKEND_URL}/api/memories", timeout=5)
+        st.write(f"Pokouším se o připojení k: {BACKEND_URL}/api/memories")
+        response = requests.get(f"{BACKEND_URL}/api/memories", timeout=10)
+        st.write(f"Status odpovědi: {response.status_code}")
+        
         if response.status_code == 200:
             # Pokud byl požadavek úspěšný, vrátíme data
-            return response.json()
+            data = response.json()
+            st.write(f"Získáno {len(data)} záznamů")
+            if len(data) > 0:
+                st.write(f"První záznam obsahuje klíče: {list(data[0].keys())}")
+            return data
         else:
             # Pokud nastal problém, zobrazíme chybovou zprávu
             st.error(f"Chyba při načítání vzpomínek (Status: {response.status_code})")
+            try:
+                st.error(f"Detaily chyby: {response.text}")
+            except:
+                pass
             return []
     except requests.exceptions.ConnectionError:
         # Pokud se nelze připojit k API
@@ -286,8 +345,56 @@ with tab1:
     # Mapa
     st.markdown('<div class="tooltip">🗺️ Interaktivní mapa<span class="tooltiptext">Klikněte na mapu pro přidání nové vzpomínky nebo na pin pro zobrazení detailu</span></div>', unsafe_allow_html=True)
     
-    # Načtení vzpomínek
+    # Získání vzpomínek
     memories = get_memories()
+    
+    # Diagnostická sekce
+    with st.expander("📊 Diagnostika API", expanded=True):
+        st.subheader("Stav načítání dat")
+        
+        # Kontrolujeme, zda máme nějaké vzpomínky
+        if memories:
+            st.success(f"✅ Načteno {len(memories)} vzpomínek z databáze")
+            if len(memories) > 0:
+                with st.expander("Detaily první vzpomínky"):
+                    st.json(memories[0])
+        else:
+            st.error("❌ Databáze neobsahuje žádné vzpomínky nebo se nepodařilo připojit k API")
+            
+            # Přímý pokus o přístup k API bez použití funkce get_memories
+            st.subheader("Přímý test API přístupu")
+            
+            try:
+                direct_url = f"{BACKEND_URL}/api/memories"
+                st.write(f"Odesílám požadavek na: {direct_url}")
+                
+                direct_response = requests.get(direct_url, timeout=10)
+                st.write(f"Status kód: {direct_response.status_code}")
+                
+                if direct_response.status_code == 200:
+                    data = direct_response.json()
+                    st.write(f"Odpověď API obsahuje {len(data)} záznamů")
+                    st.json(data[:3] if len(data) > 3 else data)  # Zobrazíme nejvýše 3 záznamy
+                else:
+                    st.error(f"Chyba při přímém přístupu k API: {direct_response.text}")
+                    
+                # Diagnostika API endpointu
+                st.subheader("Kontrola API diagnostiky")
+                diag_url = f"{BACKEND_URL}/api/diagnostic"
+                st.write(f"Odesílám požadavek na: {diag_url}")
+                
+                try:
+                    diag_response = requests.get(diag_url, timeout=5)
+                    st.write(f"Status kód: {diag_response.status_code}")
+                    if diag_response.status_code == 200:
+                        st.json(diag_response.json())
+                    else:
+                        st.error(f"Diagnostický endpoint vrátil chybu: {diag_response.text}")
+                except Exception as e:
+                    st.error(f"Nelze kontaktovat diagnostický endpoint: {str(e)}")
+                
+            except Exception as e:
+                st.error(f"Chyba při přímém přístupu k API: {str(e)}")
     
     # Informativní zpráva pro uživatele
     st.info("👉 Pro přidání nové vzpomínky klikněte na požadované místo na mapě. Pro zobrazení existující vzpomínky klikněte na modrý pin.")
