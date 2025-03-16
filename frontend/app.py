@@ -29,7 +29,7 @@ BACKEND_URL = os.getenv('BACKEND_URL', 'https://memory-map.onrender.com')
 
 # Nastavení stránky - základní konfigurace Streamlit aplikace
 st.set_page_config(
-    page_title="MemoryMap",  # Titulek stránky v prohlížeči
+    page_title="MemoryMap - Interaktivní Mapa Vzpomínek",  # Titulek stránky v prohlížeči
     page_icon="🗺️",  # Ikona stránky v prohlížeči
     layout="wide",  # Široké rozložení stránky
     initial_sidebar_state="expanded"  # Postranní panel bude na začátku rozbalený
@@ -272,8 +272,8 @@ with st.sidebar:
         st.error("❌ API není dostupné")
 
 # Hlavní obsah aplikace
-st.markdown("<h1 class='main-header'>MemoryMap</h1>", unsafe_allow_html=True)
-st.markdown("<p class='subheader'>Vizualizujte své vzpomínky na mapě</p>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-header'>🗺️ MemoryMap - AKTUALIZOVÁNO</h1>", unsafe_allow_html=True)
+st.markdown("<p class='subheader'>Interaktivní mapa s piny pro ukládání vašich vzpomínek</p>", unsafe_allow_html=True)
 
 # Záložky pro různé části aplikace
 tab1, tab2 = st.tabs(["Mapa vzpomínek", "O aplikaci"])
