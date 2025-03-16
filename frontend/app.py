@@ -302,9 +302,21 @@ def add_memory(text, location, lat, lon, source=None, date=None):
 
 # Sidebar - informace o aplikaci v postranním panelu
 with st.sidebar:
-    # Logo aplikace
-    st.image("https://via.placeholder.com/150x150.png?text=MemoryMap", width=150)
-    st.title("MemoryMap")
+    # Stylizované logo pomocí emoji a textu - nahrazujeme externí obrázek
+    st.markdown("""
+    <div style='text-align: center; margin-bottom: 20px;'>
+        <div style='font-size: 50px;'>🗺️ 📍 📝</div>
+        <div style='background: linear-gradient(90deg, #3498db, #2c3e50); 
+                   -webkit-background-clip: text; 
+                   -webkit-text-fill-color: transparent; 
+                   font-size: 28px; 
+                   font-weight: bold;
+                   margin-top: 10px;'>
+            MemoryMap
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.info(
         "Aplikace pro ukládání a vizualizaci vzpomínek a historických údajů na interaktivní mapě. "
         "Ukázka technických dovedností v oblasti vývoje geografických aplikací."
