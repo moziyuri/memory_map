@@ -336,8 +336,8 @@ with st.sidebar:
     
     # Přidám odkaz na dokumentaci
     st.subheader("📚 Dokumentace")
-    st.markdown("[GitHub repozitář](https://github.com/moziyuri/memorymap)")
-    st.markdown("[Architektura systému](https://github.com/moziyuri/memorymap/blob/main/ARCHITECTURE.md)")
+    st.markdown("[GitHub repozitář](https://github.com/moziyuri/memory_map)")
+    st.markdown("[Architektura systému](https://github.com/moziyuri/memory_map/blob/main/ARCHITECTURE.md)")
 
 # Hlavní obsah aplikace - aktualizuji nadpisy a titulky
 st.markdown("<h1 class='main-header'>🗺️ MemoryMap</h1>", unsafe_allow_html=True)
@@ -531,7 +531,7 @@ with tab2:
     # Aktualizované kontaktní údaje
     st.subheader("📬 Kontakt")
     st.markdown("**Autor:** Stanislav Horáček")
-    st.markdown("**GitHub:** [github.com/moziyuri/memorymap](https://github.com/moziyuri/memorymap)")
+    st.markdown("**GitHub:** [github.com/moziyuri/memory_map](https://github.com/moziyuri/memory_map)")
     st.markdown("**Platforma:** Demo aplikace pro technické pohovory")
 
 # Patička aplikace
@@ -541,10 +541,10 @@ st.markdown(
     <div style='text-align: center; color: #666; padding: 10px;'>
         <p>© 2023 MemoryMap | Interaktivní mapa vzpomínek</p>
         <p style='font-size: 0.8em;'>
-            <a href='https://github.com/moziyuri/memorymap' target='_blank'>GitHub</a> | 
-            <a href='https://github.com/moziyuri/memorymap/blob/main/README.md' target='_blank'>README</a> | 
-            <a href='https://github.com/moziyuri/memorymap/blob/main/USER_GUIDE.md' target='_blank'>Uživatelská příručka</a> | 
-            <a href='https://github.com/moziyuri/memorymap/blob/main/ARCHITECTURE.md' target='_blank'>Architektura</a>
+            <a href='https://github.com/moziyuri/memory_map' target='_blank'>GitHub</a> | 
+            <a href='https://github.com/moziyuri/memory_map/blob/main/README.md' target='_blank'>README</a> | 
+            <a href='https://github.com/moziyuri/memory_map/blob/main/USER_GUIDE.md' target='_blank'>Uživatelská příručka</a> | 
+            <a href='https://github.com/moziyuri/memory_map/blob/main/ARCHITECTURE.md' target='_blank'>Architektura</a>
         </p>
     </div>
     """,
