@@ -24,7 +24,7 @@ import json  # Pro práci s JSON daty
 import os  # Pro práci s proměnnými prostředí
 
 # Konfigurace backendu
-BACKEND_URL = os.getenv('BACKEND_URL', 'https://memorymap-api.onrender.com')
+BACKEND_URL = os.getenv('BACKEND_URL', 'https://memorymap-production.up.railway.app')
 
 # Nastavení stránky - základní konfigurace Streamlit aplikace
 st.set_page_config(

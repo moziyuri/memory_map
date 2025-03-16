@@ -34,8 +34,7 @@ app.add_middleware(
     allow_origins=[
         "https://stanislavhoracekmemorymap.streamlit.app",
         "http://localhost:8501",  # Pro lokální vývoj
-        "https://localhost:8501",
-        "https://memory-map.onrender.com"  # Přidaná URL backendu
+        "https://localhost:8501"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -57,6 +56,10 @@ def get_db():
         raise HTTPException(status_code=500, detail="Database configuration missing")
     
     try:
+        # Úprava URL pro Railway PostgreSQL
+        if DATABASE_URL.startswith('postgres://'):
+            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        
         conn = psycopg2.connect(DATABASE_URL)
         try:
             yield conn
