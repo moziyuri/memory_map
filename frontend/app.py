@@ -13,6 +13,7 @@ Funkce:
 
 Autor: Vytvořeno jako ukázka dovedností pro pohovor.
 """
+# Update: Vylepšení podpory interaktivních pinů a popup oken - 2023
 
 import streamlit as st  # Knihovna pro tvorbu webových aplikací
 import folium  # Knihovna pro práci s mapami
