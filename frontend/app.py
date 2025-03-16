@@ -337,7 +337,7 @@ with st.sidebar:
     # Přidám odkaz na dokumentaci
     st.subheader("📚 Dokumentace")
     st.markdown("[GitHub repozitář](https://github.com/moziyuri/memory_map)")
-    st.markdown("[Architektura systému](https://github.com/moziyuri/memory_map/blob/main/ARCHITECTURE.md)")
+    st.markdown("[Architektura systému](https://github.com/moziyuri/memory_map/blob/master/ARCHITECTURE.md)")
 
 # Hlavní obsah aplikace - aktualizuji nadpisy a titulky
 st.markdown("<h1 class='main-header'>🗺️ MemoryMap</h1>", unsafe_allow_html=True)
@@ -545,9 +545,9 @@ st.markdown(
         <p>© 2023 MemoryMap | Interaktivní mapa vzpomínek</p>
         <p style='font-size: 0.8em;'>
             <a href='https://github.com/moziyuri/memory_map' target='_blank'>GitHub</a> | 
-            <a href='https://github.com/moziyuri/memory_map/blob/main/README.md' target='_blank'>README</a> | 
-            <a href='https://github.com/moziyuri/memory_map/blob/main/USER_GUIDE.md' target='_blank'>Uživatelská příručka</a> | 
-            <a href='https://github.com/moziyuri/memory_map/blob/main/ARCHITECTURE.md' target='_blank'>Architektura</a>
+            <a href='https://github.com/moziyuri/memory_map/blob/master/README.md' target='_blank'>README</a> | 
+            <a href='https://github.com/moziyuri/memory_map/blob/master/USER_GUIDE.md' target='_blank'>Uživatelská příručka</a> | 
+            <a href='https://github.com/moziyuri/memory_map/blob/master/ARCHITECTURE.md' target='_blank'>Architektura</a>
         </p>
     </div>
     """,
