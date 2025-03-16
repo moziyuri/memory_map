@@ -63,25 +63,17 @@ def get_db():
         if DATABASE_URL.startswith('postgres://'):
             DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
         
-        # Několik pokusů o připojení
-        max_retries = 3
-        last_exception = None
-        
-        for attempt in range(max_retries):
-            try:
-                conn = psycopg2.connect(
-                    DATABASE_URL,
-                    connect_timeout=10  # Timeout pro připojení
-                )
-                return conn
-            except Exception as e:
-                last_exception = e
-                if attempt < max_retries - 1:
-                    time.sleep(1)  # Krátká pauza před dalším pokusem
-        
-        # Pokud všechny pokusy selžou
-        raise last_exception
+        print(f"Connecting to database with URL: {DATABASE_URL}")
+        conn = None
+        try:
+            conn = psycopg2.connect(DATABASE_URL)
+            yield conn
+        finally:
+            if conn is not None:
+                conn.close()
+                print("Database connection closed")
     except Exception as e:
+        print(f"Database connection error: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Database connection failed: {str(e)}"
@@ -222,6 +214,48 @@ async def get_memory(memory_id: int):
                 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Diagnostický endpoint pro kontrolu proměnných prostředí
+@app.get("/api/debug")
+async def debug_info():
+    # Příprava informací o proměnných prostředí (bezpečným způsobem)
+    env_info = {
+        "DATABASE_URL_EXISTS": os.getenv('DATABASE_URL') is not None,
+        "ENVIRONMENT": os.getenv('ENVIRONMENT', 'not set'),
+        "PORT": os.getenv('PORT', 'not set')
+    }
+    
+    # Kontrola připojení k databázi
+    db_connection_status = "Unknown"
+    db_error = None
+    try:
+        DATABASE_URL = os.getenv('DATABASE_URL')
+        if DATABASE_URL:
+            if DATABASE_URL.startswith('postgres://'):
+                DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+            
+            conn = psycopg2.connect(DATABASE_URL)
+            cur = conn.cursor()
+            cur.execute("SELECT version();")
+            version = cur.fetchone()
+            conn.close()
+            db_connection_status = "Connected"
+            db_error = None
+        else:
+            db_connection_status = "No DATABASE_URL"
+            db_error = "DATABASE_URL environment variable not set"
+    except Exception as e:
+        db_connection_status = "Failed"
+        db_error = str(e)
+    
+    return {
+        "status": "API is running",
+        "environment": env_info,
+        "database": {
+            "status": db_connection_status,
+            "error": db_error
+        }
+    }
 
 # Spuštění aplikace, pokud je tento soubor spuštěn přímo
 if __name__ == "__main__":
