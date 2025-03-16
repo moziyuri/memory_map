@@ -152,6 +152,16 @@ class MemoryText(BaseModel):
     source: Optional[str] = None  # Volitelný zdroj vzpomínky
     date: Optional[str] = None  # Volitelné datum vzpomínky
 
+# Alias pro MemoryText, který používáme v novém endpointu
+class MemoryCreate(BaseModel):
+    text: str  # Text vzpomínky
+    location: str  # Název lokace
+    latitude: float  # Zeměpisná šířka
+    longitude: float  # Zeměpisná délka
+    keywords: Optional[List[str]] = None  # Volitelná klíčová slova
+    source: Optional[str] = None  # Volitelný zdroj vzpomínky
+    date: Optional[str] = None  # Volitelné datum vzpomínky
+
 # Definice struktury dat pro výstupní data
 class MemoryResponse(BaseModel):
     id: int  # Identifikátor vzpomínky v databázi
