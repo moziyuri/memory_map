@@ -8,9 +8,52 @@ pro aplikaci MemoryMap. Měl by být spuštěn jednou při nasazení.
 import os
 import psycopg2
 import time
+import sys
+from urllib.parse import urlparse
+
+def inspect_database_url():
+    """Analyzuje proměnnou DATABASE_URL a vypíše diagnostické informace"""
+    DATABASE_URL = os.getenv('DATABASE_URL', '')
+    print(f"DATABASE_URL exists: {bool(DATABASE_URL)}")
+    
+    if not DATABASE_URL:
+        return
+    
+    print(f"DATABASE_URL starts with: {DATABASE_URL[:10]}...")
+    
+    # Analýza URL
+    try:
+        if DATABASE_URL.startswith('postgres://'):
+            parsed = urlparse(DATABASE_URL)
+            print(f"Schema: {parsed.scheme}")
+            print(f"Netloc: {parsed.netloc}")
+            print(f"Path: {parsed.path}")
+            
+            # Není potřeba vypisovat heslo, stačí zjistit, zda je přítomné
+            username = parsed.username or ''
+            password_present = bool(parsed.password)
+            host = parsed.hostname or ''
+            port = parsed.port or ''
+            
+            print(f"Username present: {bool(username)}")
+            print(f"Password present: {password_present}")
+            print(f"Host present: {bool(host)}")
+            print(f"Port present: {bool(port)}")
+    except Exception as e:
+        print(f"Error parsing DATABASE_URL: {str(e)}")
 
 def init_db():
     print("Starting database initialization...")
+    
+    # Výpis diagnostických informací
+    print("Environment variables:")
+    for key in os.environ.keys():
+        if key.startswith('DATABASE') or key.startswith('POSTGRES'):
+            # Bezpečný výpis - neukazovat celé hodnoty
+            print(f"  {key} exists: {bool(os.getenv(key))}")
+    
+    # Kontrola a diagnostika DATABASE_URL
+    inspect_database_url()
     
     # Získání DATABASE_URL z prostředí
     DATABASE_URL = os.getenv('DATABASE_URL')
@@ -20,6 +63,7 @@ def init_db():
     
     # Úprava URL pro psycopg2
     if DATABASE_URL.startswith('postgres://'):
+        print("Converting postgres:// to postgresql://")
         DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
     
     print(f"Připojuji se k databázi...")
@@ -29,7 +73,7 @@ def init_db():
     for attempt in range(max_retries):
         try:
             print(f"Pokus o připojení {attempt + 1}/{max_retries}")
-            conn = psycopg2.connect(DATABASE_URL)
+            conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
             conn.autocommit = True
             cur = conn.cursor()
             
@@ -98,4 +142,6 @@ def init_db():
     return False
 
 if __name__ == "__main__":
-    init_db() 
+    success = init_db()
+    # Explicitní návratový kód pro build proces
+    sys.exit(0 if success else 1) 
