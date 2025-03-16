@@ -186,7 +186,18 @@ async def analyze_text(data: MemoryText):
                 conn.commit()
                 
                 if result:
-                    return result
+                    # Převod na očekávaný formát
+                    memory = {
+                        "id": result["id"],
+                        "text": result["text"],
+                        "location": result["location"],
+                        "keywords": result["keywords"] if result["keywords"] else [],
+                        "source": result["source"],
+                        "date": result["date"],
+                        "longitude": result["longitude"],
+                        "latitude": result["latitude"]
+                    }
+                    return memory
                 else:
                     raise HTTPException(status_code=500, detail="Failed to insert memory")
             except Exception as insert_error:
@@ -233,9 +244,25 @@ async def get_memories():
                     ORDER BY created_at DESC
                 """)
                 
-                # Transformace výsledků do seznamu objektů
+                # Transformace výsledků do seznamu objektů podle očekávaného formátu
                 results = cur.fetchall()
-                return results
+                
+                # Převod na očekávaný formát
+                memories = []
+                for row in results:
+                    memory = {
+                        "id": row["id"],
+                        "text": row["text"],
+                        "location": row["location"],
+                        "keywords": row["keywords"] if row["keywords"] else [],
+                        "source": row["source"],
+                        "date": row["date"],
+                        "longitude": row["longitude"],
+                        "latitude": row["latitude"]
+                    }
+                    memories.append(memory)
+                
+                return memories
             except Exception as query_error:
                 print(f"Chyba při dotazu na memories: {str(query_error)}")
                 return []
@@ -252,33 +279,42 @@ async def get_memories():
 @app.get("/api/memories/{memory_id}", response_model=MemoryResponse)
 async def get_memory(memory_id: int):
     """Získání detailu konkrétní vzpomínky"""
+    conn = None
     try:
-        conn = get_db()
-        with conn.cursor() as cur:
+        # Připojení k databázi
+        conn = next(get_db())
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT id, text, location, keywords, source, date,
-                       ST_X(coordinates) as longitude, ST_Y(coordinates) as latitude
+                       ST_X(coordinates::geometry) as longitude, ST_Y(coordinates::geometry) as latitude
                 FROM memories
                 WHERE id = %s
             """, (memory_id,))
             
             result = cur.fetchone()
             if result:
-                return {
-                    "id": result[0],
-                    "text": result[1],
-                    "location": result[2],
-                    "keywords": result[3],
-                    "source": result[4],
-                    "date": result[5],
-                    "longitude": result[6],
-                    "latitude": result[7]
+                # Převod na očekávaný formát
+                memory = {
+                    "id": result["id"],
+                    "text": result["text"],
+                    "location": result["location"],
+                    "keywords": result["keywords"] if result["keywords"] else [],
+                    "source": result["source"],
+                    "date": result["date"],
+                    "longitude": result["longitude"],
+                    "latitude": result["latitude"]
                 }
+                return memory
             else:
                 raise HTTPException(status_code=404, detail="Memory not found")
                 
     except Exception as e:
+        print(f"Chyba při získávání vzpomínky {memory_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Bezpečné uzavření připojení k databázi
+        if conn:
+            conn.close()
 
 # Diagnostický endpoint pro kontrolu proměnných prostředí
 @app.get("/api/debug")

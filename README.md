@@ -1,399 +1,237 @@
-# MemoryMap - Interaktivní Mapa Vzpomínek
+# MemoryMap
 
-Tento projekt byl vytvořen jako součást přípravy na technický pohovor. Demonstruje praktické dovednosti v oblasti full-stack vývoje, práce s mapovými podklady a zpracování přirozeného jazyka.
+> **Aplikace vytvořená za účelem pohovoru** - Projekt demonstruje praktické dovednosti v oblasti full-stack vývoje, práce s mapovými podklady a zpracování geografických dat.
 
-## 🌐 Demo Aplikace
+Aplikace pro ukládání a vizualizaci vzpomínek spojených s konkrétními geografickými místy na mapě.
+
+![MemoryMap Preview](https://i.imgur.com/example.png)
+
+## 🌟 Funkce
+
+- **Interaktivní mapa** zobrazující vzpomínky ve formě pinů na mapě
+- **Přidávání vzpomínek přímo kliknutím na mapu** s textem, místem, datem a zdrojem
+- **Pop-up okna** pro rychlé zobrazení obsahu vzpomínek přímo na mapě
+- **Automatická extrakce klíčových slov** z textu vzpomínek
+- **Vyhledávání a filtrování** vzpomínek podle textu, klíčových slov, místa a data
+- **Responzivní design** pro používání na počítači i mobilních zařízeních
+
+## 🔗 Odkazy
 
 - **Frontend**: [https://stanislavhoracekmemorymap.streamlit.app](https://stanislavhoracekmemorymap.streamlit.app)
-- **Backend API**: [https://memorymap-api.onrender.com](https://memorymap-api.onrender.com)
-- **API Dokumentace**: [https://memorymap-api.onrender.com/docs](https://memorymap-api.onrender.com/docs)
+- **Backend API**: [https://memory-map.onrender.com](https://memory-map.onrender.com)
+- **API dokumentace**: [https://memory-map.onrender.com/docs](https://memory-map.onrender.com/docs)
+- **API diagnostika**: [https://memory-map.onrender.com/api/debug](https://memory-map.onrender.com/api/debug)
 
-> **Poznámka**: První načtení může trvat až 30 sekund, protože služby běží na free tier hostingu.
+## 📖 O aplikaci
 
-## 🚀 Deployment
+MemoryMap je interaktivní aplikace pro mapování vzpomínek, která vznikla jako ukázka dovedností pro účely pohovoru. Projekt demonstruje schopnosti v těchto oblastech:
 
-Aplikace je nasazena na cloudových službách:
+### Účel a vznik
+Aplikace byla vytvořena specificky pro demonstraci technických dovedností v kontextu pracovního pohovoru. Cílem bylo vytvořit funkční a esteticky přívětivou aplikaci, která ukáže schopnosti práce s moderními technologiemi a frameworks.
 
-### Backend (Render)
-- Technologie: FastAPI
-- Databáze: PostgreSQL
-- Endpoint: https://memorymap-api.onrender.com
-- Dokumentace API: https://memorymap-api.onrender.com/docs
+### Koncept
+Základní myšlenkou je možnost ukládat vzpomínky a příběhy spojené s konkrétními místy na mapě. Uživatelé mohou:
+- Procházet mapu a zobrazovat existující vzpomínky kliknutím na pin
+- Přidávat nové vzpomínky jednoduchým kliknutím na místo na mapě
+- Vyhledávat vzpomínky podle obsahu, místa nebo automaticky extrahovaných klíčových slov
 
-### Frontend (Streamlit Cloud)
-- Technologie: Streamlit
-- URL: https://stanislavhoracekmemorymap.streamlit.app
-- Hosting: Streamlit Cloud (Community)
+### Technologická ukázka
+Aplikace demonstruje zkušenosti s:
+- Tvorbou moderních full-stack aplikací
+- Vývojem interaktivních mapových rozhraní
+- Práci s geografickými daty a PostgreSQL/PostGIS
+- Návrhem a implementací REST API
+- Nasazením aplikací na cloud platformy
 
-## 💻 Lokální vývoj
+## 🏗️ Architektura
 
-1. Naklonujte repozitář:
-   ```bash
-   git clone https://github.com/moziyuri/memory_map.git
-   cd memory_map
-   ```
+MemoryMap je full-stack aplikace se třemi hlavními komponentami:
 
-2. Nainstalujte závislosti:
-   ```bash
-   pip install -r requirements.txt
-   ```
+1. **Frontend** (Streamlit) - Uživatelské rozhraní postavené na Streamlit frameworku
+2. **Backend API** (FastAPI) - REST API poskytující přístup k datům
+3. **PostgreSQL databáze** - Úložiště pro vzpomínky s PostGIS rozšířením pro geografická data
 
-3. Nastavte prostředí:
-   - Vytvořte soubor `.env` s připojením k databázi:
-     ```
-     DATABASE_URL=postgresql://username:password@localhost:5432/memorymap
-     ```
+```
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│                 │      │                 │      │                 │
+│   Frontend      │◄────►│   Backend API   │◄────►│   PostgreSQL    │
+│   (Streamlit)   │      │   (FastAPI)     │      │   + PostGIS     │
+│                 │      │                 │      │                 │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+     Streamlit               Render.com               Render.com
+```
 
-4. Spusťte aplikaci:
-   ```bash
-   # V PowerShellu
-   ./start.ps1
-   ```
+*Podrobnější popis architektury najdete v [ARCHITECTURE.md](ARCHITECTURE.md)*
 
-## O Projektu
-
-MemoryMap je webová aplikace, která umožňuje uživatelům:
-- Ukládat vzpomínky spojené s konkrétními místy na mapě
-- Nahrávat hlasové záznamy, které jsou automaticky převedeny na text
-- Vizualizovat vzpomínky na interaktivní mapě
-- Vyhledávat v uložených vzpomínkách podle místa nebo obsahu
-
-## Technologie
-
-### Backend
-- FastAPI (Python)
-- PostgreSQL s PostGIS pro geografická data
-- Whisper AI pro převod řeči na text
+## 🧰 Technologie
 
 ### Frontend
-- Streamlit pro uživatelské rozhraní
-- Folium pro interaktivní mapy
-- Streamlit-Folium pro integraci map
+- **Streamlit** - Framework pro rychlé vytváření datových aplikací
+- **Folium** - Knihovna pro vytváření interaktivních map s podporou pop-up oken a pinů
+- **Streamlit-Folium** - Integrace Folium map do Streamlit aplikací
+- **Python** - Programovací jazyk
 
-## Struktura Projektu
+### Backend
+- **FastAPI** - Moderní, rychlý (vysoce výkonný) webový framework pro tvorbu API
+- **Pydantic** - Validace dat a nastavení pomocí anotací typu Python
+- **PostgreSQL** - Relační databáze
+- **PostGIS** - Prostorové rozšíření pro PostgreSQL
+- **psycopg2** - PostgreSQL adaptér pro Python
+- **uvicorn** - ASGI server pro Python
 
-```
-/memorymap
-├── frontend/      # Streamlit aplikace
-├── backend/       # FastAPI server
-├── database/      # SQL skripty pro inicializaci databáze
-└── requirements.txt  # Python závislosti
-```
-
-## Autor
-
-Vytvořeno jako ukázka technických dovedností pro účely pohovoru.
-
-## Poznámka
-
-Tento projekt slouží jako demonstrace schopností v oblasti full-stack vývoje, práce s geografickými daty a integrace AI modelů. Byl vytvořen s důrazem na čistý kód, dobré programovací praktiky a moderní technologie.
-
-## Project Structure
+## 🧱 Struktura projektu
 
 ```
-/memorymap
-├── frontend/      # Streamlit frontend application
-├── backend/       # FastAPI backend service
-├── database/      # Database initialization scripts
-└── requirements.txt  # Python dependencies
+memorymap/
+├── frontend/              # Streamlit aplikace
+│   ├── app.py             # Hlavní soubor aplikace
+│   ├── utils.py           # Pomocné funkce
+│   └── requirements.txt   # Závislosti pro frontend
+│
+├── backend/               # FastAPI backend
+│   ├── main.py            # Hlavní soubor API
+│   ├── database.py        # Konfigurace databáze
+│   ├── models.py          # Pydantic modely
+│   ├── direct_db_init.py  # Inicializační skript pro databázi
+│   └── requirements.txt   # Závislosti pro backend
+│
+├── README.md              # Tento soubor
+├── ARCHITECTURE.md        # Detailní popis architektury
+└── USER_GUIDE.md          # Uživatelská příručka
 ```
 
-## Backend Deployment (Render)
+## 🚀 Nasazení
 
-1. Create a new Web Service on Render.com
-2. Connect your GitHub repository
-3. Configure the following settings:
-   - Root Directory: `backend/`
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `uvicorn main:app --host 0.0.0.0 --port 10000`
-   - Environment Variables:
-     - `DATABASE_URL`: Your PostgreSQL connection string
+### Frontend (Streamlit Cloud)
 
-## Frontend Deployment (Local/Streamlit)
+1. Automatický deployment z GitHub repozitáře
+2. Nastavení v `.streamlit/secrets.toml`:
+   ```toml
+   [api]
+   url = "https://memory-map.onrender.com"
+   ```
 
-1. Install dependencies:
+### Backend API (Render.com)
+
+1. Vytvoření Web Service na Render.com
+2. Build Command:
+   ```
+   pip install -r backend/requirements.txt && python backend/direct_db_init.py
+   ```
+3. Start Command:
+   ```
+   cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+   ```
+4. Environment Variables:
+   ```
+   DATABASE_URL=postgres://[username]:[password]@[host]:[port]/[database]
+   ```
+
+### PostgreSQL (Render.com)
+
+1. Vytvoření PostgreSQL databáze na Render.com
+2. Aktivace PostGIS rozšíření:
+   ```sql
+   CREATE EXTENSION postgis;
+   CREATE EXTENSION fuzzystrmatch;
+   ```
+3. Inicializace databázové struktury pomocí `direct_db_init.py`
+
+### Limity Free plánu a optimalizace
+
+> ⚠️ **Důležité**: Render.com Free plán má následující limity:
+> - Web Service: 512 MB RAM, uspání po 15 minutách neaktivity
+> - PostgreSQL: 1 GB prostoru, max 10 současných připojení
+>
+> Pro detailní informace o omezeních a praktické tipy k optimalizaci viz sekce [Limity free plánu](DEPLOYMENT.md#6-limity-free-plánu-na-rendercom-a-jejich-dodržování) v dokumentu DEPLOYMENT.md.
+
+## 📦 API Endpointy
+
+| Metoda | Endpoint            | Popis                                     |
+|--------|---------------------|-------------------------------------------|
+| GET    | /                   | Základní health check                     |
+| GET    | /api/memories       | Získání všech vzpomínek                   |
+| GET    | /api/memories/{id}  | Získání konkrétní vzpomínky podle ID      |
+| POST   | /api/analyze        | Přidání nové vzpomínky a extrakce klíčových slov |
+| GET    | /api/debug          | Diagnostika stavu API a připojení k DB    |
+
+## 📝 Použití
+
+Detailní návod na používání aplikace najdete v [uživatelské příručce](USER_GUIDE.md).
+
+### Rychlý start:
+
+1. Otevřete [aplikaci](https://stanislavhoracekmemorymap.streamlit.app)
+2. Prozkoumejte mapu s existujícími vzpomínkami kliknutím na piny
+3. Přidejte vlastní vzpomínku kliknutím na požadované místo na mapě
+4. Vyhledávejte a filtrujte vzpomínky dle potřeby
+
+## 🧪 Lokální vývoj
+
+### Prerekvizity
+
+- Python 3.9+
+- PostgreSQL s PostGIS rozšířením
+
+### Nastavení projektu
+
+1. Klonování repozitáře:
    ```bash
+   git clone https://github.com/stanislavhoracek/memorymap.git
+   cd memorymap
+   ```
+
+2. Instalace závislostí pro backend:
+   ```bash
+   cd backend
    pip install -r requirements.txt
    ```
 
-2. Run the Streamlit application:
+3. Instalace závislostí pro frontend:
    ```bash
    cd frontend
-   streamlit run app.py
-   ```
-
-## Environment Variables
-
-Create a `.env` file in the root directory with the following variables:
-
-```
-DATABASE_URL=postgresql://username:password@host:port/database
-```
-
-## API Documentation
-
-Once the backend is running, you can access the API documentation at:
-- Swagger UI: `/docs`
-- ReDoc: `/redoc`
-
-## Development
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
    pip install -r requirements.txt
    ```
-3. Set up the database using scripts in the database/ directory
-4. Run the backend:
+
+4. Konfigurace databáze:
+   - Vytvořte PostgreSQL databázi
+   - Aktivujte PostGIS rozšíření
+   - Nastavte proměnnou prostředí `DATABASE_URL`
+
+5. Inicializace databáze:
+   ```bash
+   cd backend
+   python direct_db_init.py
+   ```
+
+6. Spuštění backend API:
    ```bash
    cd backend
    uvicorn main:app --reload
    ```
-5. Run the frontend:
+
+7. Spuštění frontend aplikace:
    ```bash
    cd frontend
    streamlit run app.py
    ```
 
-## O aplikaci
+## 🤝 Přispívání
 
-MemoryMap AI je aplikace pro ukládání a vizualizaci vzpomínek na mapě. Umožňuje vám:
+Příspěvky jsou vítány! Pokud chcete přispět k projektu:
 
-- Přidávat vzpomínky s textem a lokalizací
-- Automaticky analyzovat klíčová slova pomocí AI
-- Zobrazovat vzpomínky na interaktivní mapě
-- Procházet seznam uložených vzpomínek
+1. Forkněte repozitář
+2. Vytvořte novou větev (`git checkout -b feature/amazing-feature`)
+3. Commitněte vaše změny (`git commit -m 'Add some amazing feature'`)
+4. Pushněte do větve (`git push origin feature/amazing-feature`)
+5. Vytvořte Pull Request
 
-## Nové funkce
+## 📄 Licence
 
-### Mapové vrstvy
+Distribuováno pod MIT licencí. Viz `LICENSE` pro více informací.
 
-Aplikace nyní podporuje různé mapové vrstvy, které můžete přepínat:
+## 📞 Kontakt
 
-- **Základní mapa** - Standardní mapa z Mapy.cz
-- **Historická mapa 19. století** - Historická mapa českých zemí z 19. století
-- **Císařské otisky** - Historické katastrální mapy z období Rakouska-Uherska
-- **Historické mapy ČÚZK** - Další historické mapy z Českého úřadu zeměměřického a katastrálního
+Stanislav Horáček - [stanislav.horacek@email.cz](mailto:stanislav.horacek@email.cz)
 
-Vrstvy můžete zapínat a vypínat pomocí ovladače vrstev v pravém horním rohu mapy.
-
-### Georeferencování historických názvů míst
-
-Nová funkce umožňuje vyhledávat historické názvy míst a získat jejich současné souřadnice:
-
-1. V postranním panelu najdete sekci "Georeferencování"
-2. Zadejte název historického místa (např. "Sudety", "Königgrätz", "Theresienstadt")
-3. Vyberte historické období
-4. Klikněte na tlačítko "Georeferencovat"
-5. Aplikace se pokusí najít odpovídající místo a zobrazit jeho souřadnice
-
-Tato funkce využívá databázi historických názvů míst a OpenStreetMap data pro co nejpřesnější výsledky.
-
-## Technické detaily
-
-### Struktura databáze
-
-Aplikace nyní používá tři hlavní tabulky:
-
-1. **memories** - Ukládá vzpomínky s geografickou lokalizací a klíčovými slovy
-2. **place_names** - Obsahuje historické názvy míst s lokalizací a časovým obdobím
-3. **osm_data** - Alternativní zdroj dat z OpenStreetMap pro georeferencování
-
-### PostgreSQL rozšíření
-
-Pro plnou funkčnost aplikace jsou vyžadována tyto PostgreSQL rozšíření:
-
-- **PostGIS** - Pro práci s geografickými daty
-- **fuzzystrmatch** - Pro hledání podobných názvů pomocí Levenshteinovy vzdálenosti
-- **hstore** - Pro ukládání klíč-hodnota párů u OSM dat
-
-### API Endpointy
-
-Aplikace nyní nabízí tyto API endpointy:
-
-- `GET /api/memories` - Získání všech vzpomínek
-- `POST /api/analyze` - Přidání nové vzpomínky a analýza klíčových slov pomocí AI
-- `POST /georef` - Georeferencování historického názvu místa
-
-Pro více informací o API endpointech navštivte dokumentaci na `http://localhost:8000/docs`.
-
-## Jak aplikaci spustit
-
-### Prerekvizity
-
-Pro spuštění aplikace budete potřebovat:
-
-- Python 3.7 nebo novější
-- PostgreSQL databáze s PostGIS rozšířením
-- Nainstalované závislosti ze souboru `requirements.txt`
-
-### Nastavení databáze
-
-1. Nainstalujte PostgreSQL a PostGIS rozšíření
-2. Vytvořte databázi s názvem `memorymap`:
-
-```bash
-# Spusťte následující příkaz pro inicializaci databáze
-cd memorymap/backend
-psql -U postgres -f init_db.sql
-```
-
-### Spuštění backendu
-
-1. Přejděte do adresáře backendu:
-
-```bash
-cd memorymap/backend
-```
-
-2. Spusťte backend server:
-
-```bash
-# V prostředí Windows PowerShell
-uvicorn main:app --host localhost --port 8000
-
-# NEBO použijte tento příkaz pro automatické restartování při změnách
-uvicorn main:app --host localhost --port 8000 --reload
-```
-
-3. Backend API bude dostupné na adrese `http://localhost:8000`
-4. Dokumentace API je dostupná na adrese `http://localhost:8000/docs`
-
-### Spuštění frontendu
-
-1. Přejděte do adresáře frontendu:
-
-```bash
-cd memorymap/frontend
-```
-
-2. Pro spuštění Streamlit aplikace bez uvítací obrazovky:
-
-```bash
-# V prostředí Windows PowerShell
-python run_silent.py
-
-# NEBO použijte dávkový soubor
-.\start_silent.bat
-```
-
-3. Alternativně můžete spustit Streamlit přímo:
-
-```bash
-streamlit run app.py --server.port 8501 --server.headless=true
-```
-
-4. Frontend aplikace bude dostupná na adrese `http://localhost:8501`
-
-## Vkládání dat do aplikace
-
-Data do aplikace můžete vkládat dvěma způsoby:
-
-### Přes webové rozhraní
-
-1. Otevřete webovou aplikaci na adrese `http://localhost:8501`
-2. Vyplňte formulář "Přidat novou vzpomínku" vlevo:
-   - Zadejte text vzpomínky
-   - Zadejte název místa (např. "Praha, Karlův most")
-   - Zadejte nebo upravte zeměpisné souřadnice (šířka a délka)
-3. Klikněte na tlačítko "Přidat vzpomínku"
-4. Vzpomínka bude automaticky analyzována a přidána na mapu
-
-### Přes API (pro pokročilé uživatele)
-
-1. Připravte JSON data ve formátu:
-
-```json
-{
-  "text": "Vaše vzpomínka zde",
-  "location": "Název místa",
-  "latitude": 49.8175,
-  "longitude": 15.4730,
-  "source": "Volitelný zdroj",
-  "date": "Volitelné datum"
-}
-```
-
-2. Odešlete POST požadavek na API endpoint:
-
-```bash
-curl -X POST "http://localhost:8000/api/analyze" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Vaše vzpomínka zde",
-    "location": "Název místa",
-    "latitude": 49.8175,
-    "longitude": 15.4730
-  }'
-```
-
-## Jak aplikaci sdílet
-
-Pro sdílení aplikace s ostatními uživateli máte několik možností:
-
-### 1. Lokální síť
-
-Pro zpřístupnění aplikace v rámci lokální sítě:
-
-1. Spusťte backend s parametrem `--host 0.0.0.0`:
-
-```bash
-cd memorymap/backend
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-2. Spusťte frontend s parametrem `--server.address 0.0.0.0`:
-
-```bash
-cd memorymap/frontend
-streamlit run app.py --server.port 8501 --server.address 0.0.0.0
-```
-
-3. Aplikace bude dostupná na adrese `http://VAŠE_IP_ADRESA:8501`
-4. Upravte v souboru `app.py` konstantu `API_URL` na hodnotu `http://VAŠE_IP_ADRESA:8000`
-
-### 2. Nasazení na server
-
-Pro nasazení na veřejně dostupný server:
-
-1. Nahrajte aplikaci na server (např. VPS, AWS, Azure)
-2. Nastavte databázi PostgreSQL s PostGIS
-3. Nakonfigurujte reverse proxy (NGINX nebo Apache) pro zpřístupnění aplikace
-4. Spusťte backend a frontend aplikace s příslušnými parametry
-5. Nastavte firewall pro povolení portů 8000 a 8501
-
-### 3. Kontejnerizace pomocí Docker
-
-Pro snadné nasazení můžete vytvořit Docker kompozici:
-
-1. Vytvořte Dockerfile pro backend a frontend
-2. Vytvořte docker-compose.yml pro orchestraci všech služeb
-3. Nasaďte aplikaci pomocí příkazu `docker-compose up -d`
-
-## Řešení problémů
-
-### Backend není dostupný
-
-1. Zkontrolujte, zda běží backend server pomocí příkazu:
-   ```bash
-   Get-Process -Name uvicorn*
-   ```
-2. Ujistěte se, že databáze PostgreSQL běží a je správně nakonfigurovaná
-3. Zkontrolujte logy backendu pro případné chyby
-
-### Frontend není dostupný
-
-1. Zkontrolujte, zda běží Streamlit proces:
-   ```bash
-   Get-Process -Name streamlit*
-   ```
-2. Zkuste spustit aplikaci s detailními logy:
-   ```bash
-   streamlit run app.py --server.port 8501 --log_level=debug
-   ```
-
-### Problém s připojením k databázi
-
-1. Zkontrolujte v souboru `main.py` správnost přihlašovacích údajů k databázi
-2. Ujistěte se, že PostgreSQL server běží
-3. Ověřte, že databáze `memorymap` existuje a má nainstalované PostGIS rozšíření 
+Odkaz na projekt: [https://github.com/stanislavhoracek/memorymap](https://github.com/stanislavhoracek/memorymap) 
