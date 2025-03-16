@@ -52,9 +52,16 @@ def extract_keywords(text: str) -> List[str]:
     # Vrátíme unikátní klíčová slova
     return list(set(keywords))[:5]  # Omezíme na max 5 klíčových slov
 
-# Funkce pro připojení k databázi
+# Proměnná pro uložení connection poolu - globální pro celou aplikaci
+connection_pool = None
+
 def get_db():
-    # Zkusíme najít proměnnou prostředí DATABASE_URL v různých formátech
+    """
+    Vytvoří a poskytuje připojení k databázi z connection poolu.
+    """
+    global connection_pool
+    
+    # Zjištění URL databáze z proměnných prostředí
     DATABASE_URL = None
     env_vars = [
         'DATABASE_URL',
@@ -79,17 +86,49 @@ def get_db():
             print("URL konvertováno z postgres:// na postgresql://")
         
         # Logging pro diagnostiku
-        print(f"Connecting to database with URL format: {DATABASE_URL[:10]}...")
+        print(f"Připojuji se k databázi s URL začínajícím: {DATABASE_URL[:10]}...")
         
-        # Přímé připojení
-        conn = None
+        # Pokud connection pool neexistuje, vytvoříme ho
+        if connection_pool is None:
+            try:
+                print("Vytváření nového connection poolu...")
+                # Vytvoříme přímé připojení - connection pool zde není nutný, 
+                # protože FastAPI již řeší konkurenční požadavky
+                conn = psycopg2.connect(DATABASE_URL)
+                conn.autocommit = True  # Nastavíme autocommit pro jednodušší práci
+                connection_pool = conn
+                print("Connection pool úspěšně vytvořen.")
+            except Exception as e:
+                print(f"Chyba při vytváření connection poolu: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Database connection failed: {str(e)}"
+                )
+        
+        # Vracíme existující připojení z poolu
         try:
-            conn = psycopg2.connect(DATABASE_URL)
-            yield conn
-        finally:
-            if conn:
-                conn.close()
-                print("Database connection closed")
+            # Zkontrolujeme, zda je připojení stále aktivní
+            if connection_pool.closed:
+                print("Připojení bylo uzavřeno, vytvořím nové...")
+                connection_pool = psycopg2.connect(DATABASE_URL)
+                connection_pool.autocommit = True
+                print("Nové připojení úspěšně vytvořeno.")
+                
+            # Vrátíme aktivní připojení - nebudeme ho zavírat, pouze použijeme
+            yield connection_pool
+        except Exception as e:
+            print(f"Chyba při získávání připojení z poolu: {str(e)}")
+            # Pokusíme se vytvořit nové připojení
+            try:
+                connection_pool = psycopg2.connect(DATABASE_URL)
+                connection_pool.autocommit = True
+                yield connection_pool
+            except Exception as new_e:
+                print(f"Nelze vytvořit ani náhradní připojení: {str(new_e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Database connection failed: {str(new_e)}"
+                )
             
     except Exception as e:
         print(f"Database connection error: {str(e)}")
@@ -250,31 +289,17 @@ async def get_memories():
                 # Převod na očekávaný formát
                 memories = []
                 for row in results:
-                    memory = {
-                        "id": row["id"],
-                        "text": row["text"],
-                        "location": row["location"],
-                        "keywords": row["keywords"] if row["keywords"] else [],
-                        "source": row["source"],
-                        "date": row["date"],
-                        "longitude": row["longitude"],
-                        "latitude": row["latitude"]
-                    }
+                    memory = dict(row)
                     memories.append(memory)
                 
                 return memories
-            except Exception as query_error:
-                print(f"Chyba při dotazu na memories: {str(query_error)}")
-                return []
-            
+            except Exception as e:
+                print(f"Chyba při získávání vzpomínek: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+    
     except Exception as e:
-        # Zachycení a předání chybové zprávy
-        print(f"Obecná chyba při získávání vzpomínek: {str(e)}")
-        return []
-    finally:
-        # Bezpečné uzavření připojení k databázi
-        if conn:
-            conn.close()
+        print(f"Chyba při připojení k databázi: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/memories/{memory_id}", response_model=MemoryResponse)
 async def get_memory(memory_id: int):
@@ -293,28 +318,14 @@ async def get_memory(memory_id: int):
             
             result = cur.fetchone()
             if result:
-                # Převod na očekávaný formát
-                memory = {
-                    "id": result["id"],
-                    "text": result["text"],
-                    "location": result["location"],
-                    "keywords": result["keywords"] if result["keywords"] else [],
-                    "source": result["source"],
-                    "date": result["date"],
-                    "longitude": result["longitude"],
-                    "latitude": result["latitude"]
-                }
-                return memory
+                # Převod na slovník - jednodušší způsob
+                return dict(result)
             else:
                 raise HTTPException(status_code=404, detail="Memory not found")
                 
     except Exception as e:
         print(f"Chyba při získávání vzpomínky {memory_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # Bezpečné uzavření připojení k databázi
-        if conn:
-            conn.close()
 
 # Diagnostický endpoint pro kontrolu proměnných prostředí
 @app.get("/api/debug")
@@ -533,9 +544,6 @@ async def diagnostic():
     except Exception as e:
         result["status"] = "error"
         result["errors"].append(str(e))
-    finally:
-        if conn:
-            conn.close()
     
     return result
 
@@ -563,6 +571,104 @@ def mask_db_url(url):
     except:
         # V případě problému s parsováním vracíme bezpečnou verzi
         return "database_url_format_error"
+
+# Endpoint pro přidání nové vzpomínky
+@app.post("/api/memories", response_model=MemoryResponse, status_code=201)
+async def add_memory(memory: MemoryCreate):
+    conn = None
+    try:
+        # Připojení k databázi
+        conn = next(get_db())
+        
+        # Extrahování klíčových slov, pokud nebyla poskytnuta přímo
+        keywords = memory.keywords if memory.keywords else extract_keywords(memory.text)
+        
+        # Vytvoření SQL dotazu s odolností proti SQL injection pomocí parametrizovaného dotazu
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Kontrola existence tabulky a vytvoření, pokud neexistuje
+            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'memories')")
+            table_exists = cur.fetchone()['exists']
+            
+            if not table_exists:
+                try:
+                    print("Tabulka memories neexistuje, vytvářím...")
+                    # Nejprve zkontrolujeme, zda je PostGIS nainstalován
+                    try:
+                        cur.execute("SELECT PostGIS_Version()")
+                    except:
+                        # Pokud PostGIS není nainstalován, pokusíme se ho přidat
+                        try:
+                            cur.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+                            conn.commit()
+                            print("PostGIS rozšíření úspěšně přidáno.")
+                        except Exception as e:
+                            print(f"Nelze přidat PostGIS rozšíření: {str(e)}")
+                            raise HTTPException(
+                                status_code=500,
+                                detail=f"PostGIS rozšíření není dostupné: {str(e)}"
+                            )
+                    
+                    # Vytvoření tabulky memories
+                    cur.execute("""
+                        CREATE TABLE memories (
+                            id SERIAL PRIMARY KEY,
+                            text TEXT NOT NULL,
+                            location VARCHAR(255) NOT NULL,
+                            coordinates GEOMETRY(POINT, 4326) NOT NULL,
+                            keywords TEXT[] DEFAULT '{}',
+                            source VARCHAR(255),
+                            date DATE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                    """)
+                    conn.commit()
+                    print("Tabulka memories úspěšně vytvořena.")
+                except Exception as e:
+                    print(f"Chyba při vytváření tabulky: {str(e)}")
+                    conn.rollback()
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Nelze vytvořit tabulku memories: {str(e)}"
+                    )
+            
+            try:
+                # Vložení nové vzpomínky do databáze
+                cur.execute("""
+                    INSERT INTO memories (text, location, coordinates, keywords, source, date)
+                    VALUES (%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s)
+                    RETURNING id, text, location, keywords, source, date, 
+                              ST_X(coordinates) as longitude, ST_Y(coordinates) as latitude;
+                """, (
+                    memory.text,
+                    memory.location,
+                    memory.longitude,
+                    memory.latitude,
+                    keywords,
+                    memory.source,
+                    memory.date
+                ))
+                
+                # Získání vloženého záznamu
+                new_memory = cur.fetchone()
+                conn.commit()
+                
+                if new_memory:
+                    # Převod na slovník a vrácení jako odpověď
+                    return dict(new_memory)
+                else:
+                    raise HTTPException(status_code=500, detail="Failed to retrieve the newly added memory")
+                
+            except Exception as e:
+                # Rollback v případě chyby
+                conn.rollback()
+                print(f"Chyba při vkládání vzpomínky: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+                
+    except Exception as e:
+        print(f"Obecná chyba při přidávání vzpomínky: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # Nepřidáváme finally blok, který by zavíral připojení, protože používáme connection pool
 
 # Spuštění aplikace, pokud je tento soubor spuštěn přímo
 if __name__ == "__main__":
