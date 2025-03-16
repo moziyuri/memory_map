@@ -133,12 +133,12 @@ def create_map(memories, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON):
     if not memories:
         return m
     
-    # Logujeme počet vzpomínek pro diagnostiku
-    st.write(f"Funkce create_map: Zpracovávám {len(memories)} vzpomínek")
+    # Logujeme počet vzpomínek pro diagnostiku v konzoli (ne na UI)
+    print(f"Funkce create_map: Zpracovávám {len(memories)} vzpomínek")
     
-    # Zkusíme vypsat přehled klíčů první vzpomínky pro diagnostiku
+    # Zkusíme vypsat přehled klíčů první vzpomínky do konzole, ne na UI
     if len(memories) > 0:
-        st.write(f"Klíče v první vzpomínce: {list(memories[0].keys())}")
+        print(f"Klíče v první vzpomínce: {list(memories[0].keys())}")
     
     for i, memory in enumerate(memories):
         try:
@@ -160,7 +160,7 @@ def create_map(memories, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON):
                         memory["longitude"] = coords_str["coordinates"][0]
                         memory["latitude"] = coords_str["coordinates"][1]
                 else:
-                    st.warning(f"Vzpomínka {i+1} nemá potřebné souřadnice: {memory}")
+                    print(f"Vzpomínka {i+1} nemá potřebné souřadnice: {memory}")
                     continue
             
             # Získáme souřadnice - upravujeme pro flexibilnější zpracování
@@ -169,7 +169,7 @@ def create_map(memories, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON):
             
             # Kontrola, že souřadnice jsou v rozumném rozsahu
             if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-                st.warning(f"Vzpomínka {i+1} má neplatné souřadnice: lat={lat}, lon={lon}")
+                print(f"Vzpomínka {i+1} má neplatné souřadnice: lat={lat}, lon={lon}")
                 continue
             
             # Bezpečné získání dat s fallbacky pro chybějící
@@ -205,7 +205,7 @@ def create_map(memories, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON):
             ).add_to(m)
             
         except Exception as e:
-            st.error(f"Chyba při zpracování vzpomínky {i+1}: {str(e)}")
+            print(f"Chyba při zpracování vzpomínky {i+1}: {str(e)}")
     
     # Přidání click handleru pro přidání nové vzpomínky s jasnějším popisem
     m.add_child(folium.ClickForMarker(popup="Klikněte zde pro přidání nové vzpomínky"))
@@ -304,42 +304,47 @@ def add_memory(text, location, lat, lon, source=None, date=None):
 with st.sidebar:
     # Logo aplikace
     st.image("https://via.placeholder.com/150x150.png?text=MemoryMap", width=150)
-    st.title("O aplikaci")
+    st.title("MemoryMap")
     st.info(
-        "MemoryMap je aplikace pro ukládání a vizualizaci vašich vzpomínek "
-        "na mapě. Přidejte vzpomínku kliknutím na mapu a nechte AI "
-        "analyzovat klíčová slova."
+        "Aplikace pro ukládání a vizualizaci vzpomínek a historických údajů na interaktivní mapě. "
+        "Ukázka technických dovedností v oblasti vývoje geografických aplikací."
     )
     
-    # Přidána sekce o pinech na mapě a pop-up oknech
-    st.subheader("Jak používat aplikaci")
+    # Aktualizace sekce o použití aplikace
+    st.subheader("📋 Návod k použití")
     st.markdown("""
-    **Přidání vzpomínky:**
-    1. Klikněte na mapu v místě, ke kterému se váže vaše vzpomínka
-    2. Vyplňte text vzpomínky a název místa
-    3. Uložte vzpomínku
+    **Přidání nové vzpomínky:**
+    1. Klikněte na libovolné místo na mapě
+    2. Vyplňte text vzpomínky a doplňující údaje
+    3. Klikněte na tlačítko "Uložit vzpomínku"
 
-    **Zobrazení vzpomínky:**
-    Klikněte na modrý pin pro zobrazení detailu vzpomínky v popup okně
+    **Zobrazení existující vzpomínky:**
+    - Klikněte na modrý pin na mapě
+    - Detaily se zobrazí v pop-up okně
     """)
     
-    # Kontrola připojení k API
-    st.subheader("Status API")
+    # Kontrola připojení k API - vylepšení zobrazení
+    st.subheader("🔌 Stav připojení")
     try:
         response = requests.get(f"{BACKEND_URL}", timeout=2)
         if response.status_code == 200:
-            st.success("✅ API je dostupné")
+            st.success("✅ Backend API je dostupné")
         else:
-            st.warning(f"⚠️ API vrací status kód: {response.status_code}")
+            st.warning(f"⚠️ Backend API odpovídá s kódem: {response.status_code}")
     except:
-        st.error("❌ API není dostupné")
+        st.error("❌ Backend API není dostupné")
+    
+    # Přidám odkaz na dokumentaci
+    st.subheader("📚 Dokumentace")
+    st.markdown("[GitHub repozitář](https://github.com/stanislavhoracek/memorymap)")
+    st.markdown("[Architektura systému](https://github.com/stanislavhoracek/memorymap/blob/main/ARCHITECTURE.md)")
 
-# Hlavní obsah aplikace
-st.markdown("<h1 class='main-header'>🗺️ MemoryMap - AKTUALIZOVÁNO</h1>", unsafe_allow_html=True)
-st.markdown("<p class='subheader'>Interaktivní mapa s piny pro ukládání vašich vzpomínek</p>", unsafe_allow_html=True)
+# Hlavní obsah aplikace - aktualizuji nadpisy a titulky
+st.markdown("<h1 class='main-header'>🗺️ MemoryMap</h1>", unsafe_allow_html=True)
+st.markdown("<p class='subheader'>Interaktivní mapa pro ukládání a sdílení vzpomínek</p>", unsafe_allow_html=True)
 
-# Záložky pro různé části aplikace
-tab1, tab2 = st.tabs(["Mapa vzpomínek", "O aplikaci"])
+# Záložky pro různé části aplikace - změním zobrazení na výraznější
+tab1, tab2 = st.tabs(["📍 Mapa vzpomínek", "ℹ️ O aplikaci"])
 
 with tab1:
     # Mapa
@@ -348,22 +353,22 @@ with tab1:
     # Získání vzpomínek
     memories = get_memories()
     
-    # Diagnostická sekce
-    with st.expander("📊 Diagnostika API", expanded=True):
+    # Kompaktnější diagnostická sekce
+    with st.expander("📊 Diagnostika API", expanded=False):
         st.subheader("Stav načítání dat")
         
         # Kontrolujeme, zda máme nějaké vzpomínky
         if memories:
             st.success(f"✅ Načteno {len(memories)} vzpomínek z databáze")
+            # Detaily první vzpomínky zobrazíme pouze pokud existují vzpomínky
             if len(memories) > 0:
-                with st.expander("Detaily první vzpomínky"):
-                    st.json(memories[0])
+                st.write("Detaily první vzpomínky:")
+                st.json(memories[0])
         else:
             st.error("❌ Databáze neobsahuje žádné vzpomínky nebo se nepodařilo připojit k API")
             
-            # Přímý pokus o přístup k API bez použití funkce get_memories
+            # Pouze pokud nejsou načteny vzpomínky, pokusíme se o přímý přístup k API
             st.subheader("Přímý test API přístupu")
-            
             try:
                 direct_url = f"{BACKEND_URL}/api/memories"
                 st.write(f"Odesílám požadavek na: {direct_url}")
@@ -377,167 +382,164 @@ with tab1:
                     st.json(data[:3] if len(data) > 3 else data)  # Zobrazíme nejvýše 3 záznamy
                 else:
                     st.error(f"Chyba při přímém přístupu k API: {direct_response.text}")
-                    
-                # Diagnostika API endpointu
-                st.subheader("Kontrola API diagnostiky")
-                diag_url = f"{BACKEND_URL}/api/diagnostic"
-                st.write(f"Odesílám požadavek na: {diag_url}")
-                
-                try:
-                    diag_response = requests.get(diag_url, timeout=5)
-                    st.write(f"Status kód: {diag_response.status_code}")
-                    if diag_response.status_code == 200:
-                        st.json(diag_response.json())
-                    else:
-                        st.error(f"Diagnostický endpoint vrátil chybu: {diag_response.text}")
-                except Exception as e:
-                    st.error(f"Nelze kontaktovat diagnostický endpoint: {str(e)}")
-                
             except Exception as e:
                 st.error(f"Chyba při přímém přístupu k API: {str(e)}")
     
-    # Informativní zpráva pro uživatele
+    # Informační zpráva pro uživatele
     st.info("👉 Pro přidání nové vzpomínky klikněte na požadované místo na mapě. Pro zobrazení existující vzpomínky klikněte na modrý pin.")
     
-    # Vytvoření a zobrazení mapy
-    m = create_map(memories)
-    map_data = st_folium(m, width=1200, height=600)
-    
-    # Pokud uživatel klikl na mapu
-    if map_data and map_data.get("last_clicked"):
-        lat, lon = map_data["last_clicked"]["lat"], map_data["last_clicked"]["lng"]
+    # Vytvoření a zobrazení mapy - přesouváme mimo diagnostickou sekci a zjednodušujeme
+    try:
+        # Vytvoření mapy
+        m = create_map(memories)
         
-        # Získání přibližného názvu místa pomocí reverzního geokódování
-        try:
-            import reverse_geocoder as rg
-            location_info = rg.search((lat, lon))
-            if location_info and len(location_info) > 0:
-                suggested_location = f"{location_info[0]['name']}, {location_info[0]['admin1']}"
-            else:
-                suggested_location = ""
-        except:
-            suggested_location = ""
+        # Zobrazení mapy v aplikaci
+        map_data = st_folium(m, width=1200, height=600)
         
-        # Zobrazení souřadnic místa (ale uživatel je nemusí zadávat ručně)
-        st.success(f"📍 Vybráno místo: {suggested_location or 'Neidentifikováno'} (souřadnice: {lat:.6f}, {lon:.6f})")
-        
-        # Vylepšený formulář pro přidání vzpomínky
-        with st.form("memory_form"):
-            st.subheader("📝 Přidání nové vzpomínky")
-            text = st.text_area("Text vzpomínky", height=150, help="Popište svou vzpomínku nebo příběh spojený s tímto místem")
+        # Zpracování kliknutí na mapu
+        if map_data and map_data.get("last_clicked"):
+            lat, lon = map_data["last_clicked"]["lat"], map_data["last_clicked"]["lng"]
             
-            # Pokud máme návrh názvu místa, předvyplníme ho, jinak necháme prázdné
-            location = st.text_input("Název místa", value=suggested_location, 
-                                    help="Zadejte název místa, ke kterému se vzpomínka váže")
-            
-            # Přidáme další volitelná pole
-            col1, col2 = st.columns(2)
-            with col1:
-                source = st.text_input("Zdroj vzpomínky (volitelné)", 
-                                    help="Např. 'Osobní zážitek', 'Vyprávění babičky', 'Historická kniha'")
-            with col2:
-                date = st.text_input("Datum vzpomínky (volitelné)", 
-                                   help="Datum, ke kterému se vzpomínka váže, např. 'Léto 1989'")
-            
-            # Přidáme tlačítka
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                submit = st.form_submit_button("💾 Uložit vzpomínku", use_container_width=True)
-            with col2:
-                st.markdown("<div style='height: 34px;'></div>", unsafe_allow_html=True)  # Prázdný prostor pro zarovnání
-            
-            if submit:
-                if text and location:
-                    # Připravíme data pro odeslání včetně volitelných polí
-                    data = {
-                        "text": text,
-                        "location": location,
-                        "latitude": lat,
-                        "longitude": lon
-                    }
-                    
-                    # Přidáme volitelná pole, pokud byla vyplněna
-                    if source:
-                        data["source"] = source
-                    if date:
-                        data["date"] = date
-                    
-                    # Odeslání dat na backend
-                    with st.spinner("Ukládám vzpomínku a analyzuji klíčová slova..."):
-                        success, message = add_memory(text, location, lat, lon, source, date)
-                        if success:
-                            st.success(message)
-                            st.balloons()  # Přidáme efekt balonků pro oslavu úspěchu
-                            time.sleep(1)  # Krátká pauza, aby uživatel viděl úspěšnou zprávu
-                            st.experimental_rerun()  # Obnovíme stránku pro zobrazení nového pinu
-                        else:
-                            st.error(message)
+            # Získání přibližného názvu místa pomocí reverzního geokódování
+            try:
+                import reverse_geocoder as rg
+                location_info = rg.search((lat, lon))
+                if location_info and len(location_info) > 0:
+                    suggested_location = f"{location_info[0]['name']}, {location_info[0]['admin1']}"
                 else:
-                    st.warning("⚠️ Vyplňte prosím text vzpomínky a název místa")
-    else:
-        # Pokud uživatel ještě neklikl na mapu, zobrazíme instrukce
-        if not memories:
-            st.info("Na mapě zatím nejsou žádné vzpomínky. Klikněte na mapu pro přidání první vzpomínky.")
+                    suggested_location = f"Místo na souřadnicích [{lat:.5f}, {lon:.5f}]"
+            except Exception as e:
+                # Pokud selže reverzní geokódování, použijeme jen souřadnice
+                suggested_location = f"Místo na souřadnicích [{lat:.5f}, {lon:.5f}]"
+            
+            # Formulář pro přidání nové vzpomínky
+            st.subheader("📝 Přidat novou vzpomínku")
+            
+            # Vytvoření jednoduchého formuláře
+            with st.form("memory_form"):
+                # Text vzpomínky
+                text = st.text_area("Text vzpomínky*", height=150, 
+                                   help="Popište vaši vzpomínku nebo historickou událost")
+                
+                # Název místa - předvyplněný z reverzního geokódování
+                location = st.text_input("Název místa*", 
+                                       value=suggested_location,
+                                       help="Název místa, ke kterému se vzpomínka váže")
+                
+                # Rozšířené informace - volitelné
+                col1, col2 = st.columns(2)
+                with col1:
+                    source = st.text_input("Zdroj (volitelné)", 
+                                          help="Odkud informace pochází (kniha, archiv, osobní zkušenost)")
+                with col2:
+                    date = st.text_input("Datum (volitelné)", 
+                                        help="Datum vzpomínky nebo události (libovolný formát)")
+                
+                # Informace o souřadnicích - pouze pro informaci
+                st.write(f"Souřadnice: {lat:.5f}, {lon:.5f}")
+                
+                # Tlačítko pro odeslání
+                submit = st.form_submit_button("Uložit vzpomínku")
+                
+                # Zpracování odeslání formuláře
+                if submit:
+                    if text and location:
+                        # Odeslání dat na backend
+                        with st.spinner("Ukládám vzpomínku a analyzuji klíčová slova..."):
+                            success, message = add_memory(text, location, lat, lon, source, date)
+                            if success:
+                                st.success(message)
+                                st.balloons()  # Přidáme efekt balonků pro oslavu úspěchu
+                                time.sleep(1)  # Krátká pauza, aby uživatel viděl úspěšnou zprávu
+                                st.experimental_rerun()  # Obnovíme stránku pro zobrazení nového pinu
+                            else:
+                                st.error(message)
+                    else:
+                        st.warning("⚠️ Vyplňte prosím text vzpomínky a název místa")
+    except Exception as e:
+        st.error(f"Chyba při vytváření nebo zobrazení mapy: {str(e)}")
+        st.write("Detaily chyby:")
+        st.exception(e)
 
 with tab2:
-    st.header("O aplikaci MemoryMap")
+    st.header("🧠 O aplikaci MemoryMap")
     
     # Zvýrazněná informace o účelu aplikace
-    st.info("**MemoryMap** byla vytvořena za účelem demonstrace technických dovedností při pracovním pohovoru. Projekt ukazuje praktické zkušenosti s vývojem full-stack aplikací, zpracováním geografických dat a propojením moderních technologií.")
+    st.info("**MemoryMap** je interaktivní projekt pro ukládání geograficky umístěných vzpomínek a historických faktů. Byl vytvořen jako ukázka technických dovedností pro účely pracovního pohovoru, demonstrující praktické zkušenosti s vývojem full-stack aplikací a zpracováním geografických dat.")
     
-    # Struktura aplikace
-    st.subheader("Struktura aplikace")
+    # Aktualizovaná struktura aplikace - více detailů
+    st.subheader("🔍 Architektura projektu")
     st.markdown("""
     ```
     MemoryMap/
     ├── Frontend (Streamlit)
-    │   └── Interaktivní mapa s piny a pop-up okny pro zobrazení a přidávání vzpomínek
-    │   ├── Backend (FastAPI)
-    │   │   ├── REST API pro správu vzpomínek
-    │   │   └── Analýza textu a extrakce klíčových slov
-    │   └── Database (PostgreSQL + PostGIS)
-    │       └── Geografická databáze vzpomínek
+    │   └── Interaktivní mapa s piny a formulářem pro přidávání vzpomínek
+    ├── Backend (FastAPI)
+    │   ├── REST API pro správu vzpomínek
+    │   ├── PostgreSQL + PostGIS databáze
+    │   └── Analýza textu a extrakce klíčových slov
+    └── Infrastruktura
+        ├── Nasazení na Streamlit Cloud (frontend)
+        └── Nasazení na Render.com (backend)
     ```
     """)
     
-    # Technologie
-    st.subheader("Použité technologie")
-    col1, col2 = st.columns(2)
+    # Aktualizované technologie
+    st.subheader("⚙️ Použité technologie")
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.markdown("**Frontend:**")
         st.markdown("- Streamlit")
         st.markdown("- Folium (interaktivní mapy)")
-        st.markdown("- Streamlit-Folium")
+        st.markdown("- Reverse Geocoding")
     
     with col2:
         st.markdown("**Backend:**")
         st.markdown("- FastAPI")
-        st.markdown("- PostgreSQL + PostGIS")
-        st.markdown("- Pydantic, psycopg2")
+        st.markdown("- Pydantic")
+        st.markdown("- RESTful API")
     
-    # Funkcionalita
-    st.subheader("Hlavní funkce")
+    with col3:
+        st.markdown("**Databáze:**")
+        st.markdown("- PostgreSQL")
+        st.markdown("- PostGIS rozšíření")
+        st.markdown("- psycopg2")
+    
+    # Aktualizovaná funkcionalita
+    st.subheader("✨ Hlavní funkce")
     st.markdown("""
     - **Interaktivní mapa** s piny reprezentujícími uložené vzpomínky
-    - **Pop-up okna** pro rychlé zobrazení obsahu vzpomínek
-    - **Přidávání vzpomínek** přímo kliknutím na mapu
-    - **Automatická extrakce klíčových slov** z textu vzpomínek
-    - **Vyhledávání a filtrování** vzpomínek podle různých kritérií
+    - **Pop-up okna** s detaily vzpomínek a klíčovými slovy
+    - **Intuitivní přidávání vzpomínek** kliknutím na mapě
+    - **Automatická geolokace** podle kliknutí na mapě
+    - **Extrakce klíčových slov** z textu vzpomínek
+    - **Multivrstvá mapa** s moderním i historickým zobrazením
     """)
     
-    # Kontakt
-    st.subheader("Kontakt")
+    # Aktualizovaný cíl projektu
+    st.subheader("🎯 Cíl projektu")
+    st.markdown("""
+    Tento projekt demonstruje komplexní full-stack aplikaci s důrazem na:
+    1. **Moderní architekturu** - oddělení frontend a backend logiky
+    2. **Geografické funkce** - práce s mapami a prostorovými daty
+    3. **RESTful API design** - čistá implementace API endpointů
+    4. **Cloud deployment** - nasazení v produkčním prostředí
+    5. **Uživatelskou přívětivost** - intuitivní rozhraní pro interakci s mapou
+    """)
+    
+    # Aktualizované kontaktní údaje
+    st.subheader("📬 Kontakt")
     st.markdown("**Autor:** Stanislav Horáček")
-    st.markdown("**Email:** stanislav.horacek@email.cz")
     st.markdown("**GitHub:** [github.com/stanislavhoracek/memorymap](https://github.com/stanislavhoracek/memorymap)")
+    st.markdown("**Platforma:** Demo aplikace pro technické pohovory")
 
 # Patička aplikace
 st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #666; padding: 10px;'>
-        <p>© 2023 MemoryMap | Aplikace vytvořená za účelem pohovoru</p>
+        <p>© 2023 MemoryMap | Interaktivní mapa vzpomínek</p>
         <p style='font-size: 0.8em;'>
             <a href='https://github.com/stanislavhoracek/memorymap' target='_blank'>GitHub</a> | 
             <a href='https://github.com/stanislavhoracek/memorymap/blob/main/README.md' target='_blank'>README</a> | 
