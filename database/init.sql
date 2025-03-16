@@ -1,19 +1,20 @@
--- Enable PostGIS extension
+-- Povolení PostGIS rozšíření
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- Create memories table
+-- Vytvoření tabulky pro vzpomínky
 CREATE TABLE IF NOT EXISTS memories (
     id SERIAL PRIMARY KEY,
     text TEXT NOT NULL,
-    location GEOMETRY(Point, 4326) NOT NULL,
-    keywords TEXT[] NOT NULL,
-    source TEXT,
-    date DATE,
+    location VARCHAR(255) NOT NULL,
+    coordinates GEOMETRY(Point, 4326) NOT NULL,
+    keywords TEXT[] DEFAULT '{}',
+    source VARCHAR(255),
+    date VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create spatial index
-CREATE INDEX IF NOT EXISTS idx_memories_location ON memories USING GIST (location);
+-- Vytvoření prostorového indexu pro rychlejší vyhledávání
+CREATE INDEX IF NOT EXISTS memories_coordinates_idx ON memories USING GIST (coordinates);
 
--- Create text search index
-CREATE INDEX IF NOT EXISTS idx_memories_text ON memories USING GIN (to_tsvector('czech', text)); 
+-- Vytvoření textového indexu pro fulltextové vyhledávání
+CREATE INDEX IF NOT EXISTS memories_text_idx ON memories USING GIN (to_tsvector('simple', text)); 

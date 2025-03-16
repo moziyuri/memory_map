@@ -1,6 +1,55 @@
 # MemoryMap - Interaktivní Mapa Vzpomínek
 
-Tento projekt byl vytvořen jako součást přípravy na pohovor. Demonstruje praktické dovednosti v oblasti full-stack vývoje a práce s mapovými podklady. 
+Tento projekt byl vytvořen jako součást přípravy na technický pohovor. Demonstruje praktické dovednosti v oblasti full-stack vývoje, práce s mapovými podklady a zpracování přirozeného jazyka.
+
+## 🌐 Demo Aplikace
+
+- **Frontend**: [https://stanislavhoracekmemorymap.streamlit.app](https://stanislavhoracekmemorymap.streamlit.app)
+- **Backend API**: [https://memorymap-api.onrender.com](https://memorymap-api.onrender.com)
+- **API Dokumentace**: [https://memorymap-api.onrender.com/docs](https://memorymap-api.onrender.com/docs)
+
+> **Poznámka**: První načtení může trvat až 30 sekund, protože služby běží na free tier hostingu.
+
+## 🚀 Deployment
+
+Aplikace je nasazena na cloudových službách:
+
+### Backend (Render)
+- Technologie: FastAPI
+- Databáze: PostgreSQL
+- Endpoint: https://memorymap-api.onrender.com
+- Dokumentace API: https://memorymap-api.onrender.com/docs
+
+### Frontend (Streamlit Cloud)
+- Technologie: Streamlit
+- URL: https://stanislavhoracekmemorymap.streamlit.app
+- Hosting: Streamlit Cloud (Community)
+
+## 💻 Lokální vývoj
+
+1. Naklonujte repozitář:
+   ```bash
+   git clone https://github.com/moziyuri/memory_map.git
+   cd memory_map
+   ```
+
+2. Nainstalujte závislosti:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Nastavte prostředí:
+   - Vytvořte soubor `.env` s připojením k databázi:
+     ```
+     DATABASE_URL=postgresql://username:password@localhost:5432/memorymap
+     ```
+
+4. Spusťte aplikaci:
+   ```bash
+   # V PowerShellu
+   ./start.ps1
+   ```
+
 ## O Projektu
 
 MemoryMap je webová aplikace, která umožňuje uživatelům:
@@ -30,56 +79,6 @@ MemoryMap je webová aplikace, která umožňuje uživatelům:
 ├── database/      # SQL skripty pro inicializaci databáze
 └── requirements.txt  # Python závislosti
 ```
-
-## Instalace a Spuštění
-
-1. Naklonujte repozitář:
-   ```bash
-   git clone https://github.com/moziyuri/memory_map.git
-   cd memory_map
-   ```
-
-2. Nainstalujte závislosti:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Nastavte prostředí:
-   - Vytvořte soubor `.env` s připojením k databázi:
-     ```
-     DATABASE_URL=postgresql://username:password@localhost:5432/memorymap
-     ```
-
-4. Inicializujte databázi:
-   - Spusťte skripty ze složky `database/`
-
-5. Spusťte aplikaci:
-   ```bash
-   # V PowerShellu
-   ./start.ps1
-   ```
-
-## API Dokumentace
-
-Po spuštění backendu je dostupná na:
-- Swagger UI: `/docs`
-- ReDoc: `/redoc`
-
-## Vývoj
-
-Projekt demonstruje následující dovednosti:
-- Návrh a implementace REST API
-- Práce s prostorovými daty v PostgreSQL
-- Integrace AI modelů (Whisper pro převod řeči na text)
-- Tvorba interaktivního UI pomocí Streamlit
-- Deployment na cloudové služby (Render)
-
-## Deployment
-
-Backend je připraven pro nasazení na Render.com:
-- Root Directory: `backend/`
-- Build Command: `pip install -r requirements.txt`
-- Start Command: `uvicorn main:app --host 0.0.0.0 --port 10000`
 
 ## Autor
 

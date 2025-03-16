@@ -17,21 +17,24 @@ Autor: Vytvořeno jako ukázka dovedností pro pohovor.
 import streamlit as st  # Knihovna pro tvorbu webových aplikací
 import folium  # Knihovna pro práci s mapami
 import requests  # Knihovna pro HTTP požadavky
-from streamlit_folium import folium_static  # Pro zobrazení folium map ve Streamlitu
+from streamlit_folium import folium_static, st_folium  # Pro zobrazení folium map ve Streamlitu
 from datetime import datetime  # Pro práci s datem a časem
 import time  # Pro práci s časem
 import json  # Pro práci s JSON daty
+import os  # Pro práci s proměnnými prostředí
+
+# Konfigurace backendu
+BACKEND_URL = os.getenv('BACKEND_URL', 'https://memorymap-api.onrender.com')
 
 # Nastavení stránky - základní konfigurace Streamlit aplikace
 st.set_page_config(
-    page_title="MemoryMap AI",  # Titulek stránky v prohlížeči
+    page_title="MemoryMap",  # Titulek stránky v prohlížeči
     page_icon="🗺️",  # Ikona stránky v prohlížeči
     layout="wide",  # Široké rozložení stránky
     initial_sidebar_state="expanded"  # Postranní panel bude na začátku rozbalený
 )
 
 # Konstanty aplikace
-API_URL = "http://localhost:8000"  # Adresa backend API
 DEFAULT_LAT = 49.8  # Výchozí zeměpisná šířka (zhruba střed ČR)
 DEFAULT_LON = 15.5  # Výchozí zeměpisná délka (zhruba střed ČR)
 
@@ -61,13 +64,50 @@ st.markdown("""
         border-radius: 5px;
         border-left: 5px solid #FF5722;
     }
+    .tooltip {
+        position: relative;
+        display: inline-block;
+    }
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 200px;
+        background-color: #555;
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 5px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -100px;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# Funkce pro komunikaci s backendem
+def api_request(endpoint, method='GET', data=None):
+    url = f"{BACKEND_URL}{endpoint}"
+    try:
+        if method == 'GET':
+            response = requests.get(url)
+        elif method == 'POST':
+            response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Chyba při komunikaci s API: {str(e)}")
+        return None
 
 # Helper funkce pro vytvoření mapy se vzpomínkami
 def create_map(memories, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON):
     """Vytvoření mapy s markery vzpomínek"""
-    # Inicializace mapy se středem a úrovní přiblížení
     m = folium.Map(location=[center_lat, center_lon], zoom_start=7)
     
     # Přidání základní mapové vrstvy Mapy.cz
@@ -78,56 +118,40 @@ def create_map(memories, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON):
         overlay=False
     ).add_to(m)
     
-    # Přidání historické mapové vrstvy z 19. století
+    # Přidání historické mapové vrstvy
     folium.TileLayer(
         tiles='https://mapserver.mapy.cz/19century-m/{z}-{x}-{y}',
         attr='Mapy.cz - 19. století',
-        name='Historická mapa 19. století',
-        overlay=True
-    ).add_to(m)
-    
-    # Přidání vrstvy císařských otisků
-    folium.TileLayer(
-        tiles='https://ags.cuzk.cz/archiv-wmts/tile/1.0.0/3857/{z}/{y}/{x}',
-        attr='ČÚZK - Archivy',
-        name='Císařské otisky',
-        overlay=True
-    ).add_to(m)
-    
-    # Přidání další historické vrstvy ČÚZK
-    folium.TileLayer(
-        tiles='https://ags.cuzk.cz/archiv-wmts/tile/1.0.0/3857/{z}/{y}/{x}',
-        attr='ČÚZK - Archivy',
-        name='Historické mapy ČÚZK',
+        name='Historická mapa',
         overlay=True
     ).add_to(m)
     
     # Přidání ovladače vrstev
     folium.LayerControl().add_to(m)
     
-    # Když nejsou žádné vzpomínky, vrátíme prázdnou mapu
     if not memories:
         return m
     
-    # Přidáme každou vzpomínku jako marker na mapě
     for memory in memories:
-        # Vytvoření HTML obsahu pro popup markeru
         popup_content = f"""
         <div style='width: 300px'>
             <h4>{memory['location']}</h4>
             <p>{memory['text']}</p>
             <p><small><b>Klíčová slova:</b> {', '.join(memory['keywords'])}</small></p>
             <p><small><b>Vytvořeno:</b> {memory.get('created_at', 'Neznámé datum')}</small></p>
+            <a href="#" onclick="showMemoryDetail('{memory['id']}')">Zobrazit detail</a>
         </div>
         """
         
-        # Přidání markeru na mapu
         folium.Marker(
-            [memory["latitude"], memory["longitude"]],  # Pozice markeru
-            popup=folium.Popup(popup_content, max_width=300),  # Obsah popup okna
-            tooltip=memory["location"],  # Text, který se zobrazí při najetí myší
-            icon=folium.Icon(icon="bookmark", prefix="fa", color="blue")  # Ikona markeru
+            [memory["latitude"], memory["longitude"]],
+            popup=folium.Popup(popup_content, max_width=300),
+            tooltip=memory["location"],
+            icon=folium.Icon(icon="bookmark", prefix="fa", color="blue")
         ).add_to(m)
+    
+    # Přidání click handleru pro přidání nové vzpomínky
+    m.add_child(folium.ClickForMarker(popup="Klikněte pro přidání vzpomínky"))
     
     return m
 
@@ -136,7 +160,7 @@ def georeference_placename(place_name, historical_period="1950"):
     """Georeferencování historického názvu místa pomocí API"""
     try:
         response = requests.post(
-            f"{API_URL}/georef", 
+            f"{BACKEND_URL}/georef", 
             json={"place_name": place_name, "historical_period": historical_period},
             timeout=10
         )
@@ -154,7 +178,7 @@ def get_memories():
     """Získání všech vzpomínek z API"""
     try:
         # Odeslání GET požadavku na backend API
-        response = requests.get(f"{API_URL}/api/memories", timeout=5)
+        response = requests.get(f"{BACKEND_URL}/api/memories", timeout=5)
         if response.status_code == 200:
             # Pokud byl požadavek úspěšný, vrátíme data
             return response.json()
@@ -164,7 +188,7 @@ def get_memories():
             return []
     except requests.exceptions.ConnectionError:
         # Pokud se nelze připojit k API
-        st.error(f"Nepodařilo se připojit k API na adrese {API_URL}. Zkontrolujte, zda backend běží.")
+        st.error(f"Nepodařilo se připojit k API na adrese {BACKEND_URL}. Zkontrolujte, zda backend běží.")
         return []
     except Exception as e:
         # Zachycení všech ostatních chyb
@@ -185,7 +209,7 @@ def add_memory(text, location, lat, lon):
         
         # Odeslání POST požadavku na backend API
         response = requests.post(
-            f"{API_URL}/api/analyze",
+            f"{BACKEND_URL}/api/analyze",
             json=data,
             timeout=10
         )
@@ -197,7 +221,7 @@ def add_memory(text, location, lat, lon):
             return False, f"Chyba při přidávání vzpomínky: {response.text}"
     except requests.exceptions.ConnectionError:
         # Pokud se nelze připojit k API
-        return False, f"Nepodařilo se připojit k API na adrese {API_URL}. Zkontrolujte, zda backend běží."
+        return False, f"Nepodařilo se připojit k API na adrese {BACKEND_URL}. Zkontrolujte, zda backend běží."
     except Exception as e:
         # Zachycení všech ostatních chyb
         return False, f"Chyba při komunikaci s API: {str(e)}"
@@ -238,7 +262,7 @@ with st.sidebar:
     # Kontrola připojení k API
     st.subheader("Status API")
     try:
-        response = requests.get(f"{API_URL}", timeout=2)
+        response = requests.get(f"{BACKEND_URL}", timeout=2)
         if response.status_code == 200:
             st.success("✅ API je dostupné")
         else:
@@ -247,84 +271,74 @@ with st.sidebar:
         st.error("❌ API není dostupné")
 
 # Hlavní obsah aplikace
-st.markdown("<h1 class='main-header'>MemoryMap AI</h1>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-header'>MemoryMap</h1>", unsafe_allow_html=True)
 st.markdown("<p class='subheader'>Vizualizujte své vzpomínky na mapě</p>", unsafe_allow_html=True)
 
-# Rozdělení obrazovky na dva sloupce
-col1, col2 = st.columns([1, 2])
+# Záložky pro různé části aplikace
+tab1, tab2 = st.tabs(["Mapa vzpomínek", "O aplikaci"])
 
-# Levý sloupec - formulář pro přidání vzpomínky
-with col1:
-    st.markdown("### Přidat novou vzpomínku")
+with tab1:
+    # Mapa
+    st.markdown('<div class="tooltip">🗺️ Interaktivní mapa<span class="tooltiptext">Klikněte na mapu pro přidání nové vzpomínky nebo na pin pro zobrazení detailu</span></div>', unsafe_allow_html=True)
     
-    # Vytvoření formuláře
-    with st.form("memory_form", clear_on_submit=True):
-        # Pole pro text vzpomínky
-        text = st.text_area("Text vzpomínky", placeholder="Popište svou vzpomínku...", height=150)
-        # Pole pro název místa
-        location = st.text_input("Název místa", placeholder="Např. Praha, Brno, ...")
-        
-        # Pole pro souřadnice - rozděleno do dvou sloupců
-        lat_col, lon_col = st.columns(2)
-        with lat_col:
-            lat = st.number_input("Zeměpisná šířka", value=DEFAULT_LAT, format="%.6f")
-        with lon_col:
-            lon = st.number_input("Zeměpisná délka", value=DEFAULT_LON, format="%.6f")
-        
-        # Tlačítko pro odeslání formuláře
-        submit_button = st.form_submit_button("Přidat vzpomínku", use_container_width=True)
-        
-        # Zpracování formuláře po odeslání
-        if submit_button:
-            if not text or not location:
-                # Kontrola, zda jsou vyplněna povinná pole
-                st.error("Vyplňte prosím text vzpomínky a název místa.")
-            else:
-                # Odeslání dat na backend
-                with st.spinner("Přidávám vzpomínku a analyzuji klíčová slova..."):
-                    success, message = add_memory(text, location, lat, lon)
-                    if success:
-                        # Zobrazení úspěšné zprávy
-                        st.markdown(f"<div class='success-msg'>{message}</div>", unsafe_allow_html=True)
-                        time.sleep(1)  # Krátké zpoždění pro lepší UX
-                        st.experimental_rerun()  # Znovu načteme stránku pro aktualizaci dat
-                    else:
-                        # Zobrazení chybové zprávy
-                        st.markdown(f"<div class='error-msg'>{message}</div>", unsafe_allow_html=True)
-
-# Pravý sloupec - mapa a seznam vzpomínek
-with col2:
-    st.markdown("### Mapa vzpomínek")
-    
-    # Nastavení typu mapového podkladu
-    map_type = st.radio(
-        "Vyberte typ mapového podkladu:",
-        ("Moderní", "Historický", "Všechny vrstvy"),
-        horizontal=True
-    )
-    
-    # Načtení vzpomínek z API
-    with st.spinner("Načítám vzpomínky..."):
-        memories = get_memories()
+    # Načtení vzpomínek
+    memories = get_memories()
     
     # Vytvoření a zobrazení mapy
-    if memories:
-        # Pokud jsou nějaké vzpomínky, vytvoříme mapu s markery
-        memory_map = create_map(memories)
-        folium_static(memory_map, width=800, height=500)
+    m = create_map(memories)
+    map_data = st_folium(m, width=1200, height=600)
+    
+    # Pokud uživatel klikl na mapu
+    if map_data and map_data.get("last_clicked"):
+        lat, lon = map_data["last_clicked"]["lat"], map_data["last_clicked"]["lng"]
         
-        # Výpis seznamu vzpomínek
-        st.markdown(f"### Seznam vzpomínek ({len(memories)})")
-        for idx, memory in enumerate(memories):
-            # Každá vzpomínka je v rozbalovacím panelu
-            with st.expander(f"{memory['location']} - {', '.join(memory['keywords'][:3])}"):
-                st.write(memory['text'])
-                st.caption(f"Souřadnice: {memory['latitude']}, {memory['longitude']}")
-    else:
-        # Pokud nejsou žádné vzpomínky, zobrazíme prázdnou mapu a informaci
-        placeholder_map = create_map([])
-        folium_static(placeholder_map, width=800, height=500)
-        st.info("Zatím zde nejsou žádné vzpomínky. Přidejte svou první vzpomínku pomocí formuláře vlevo.")
+        # Formulář pro přidání vzpomínky
+        with st.form("memory_form"):
+            st.markdown('<div class="tooltip">📝 Nová vzpomínka<span class="tooltiptext">Zapište svou vzpomínku spojenou s tímto místem</span></div>', unsafe_allow_html=True)
+            text = st.text_area("Text vzpomínky")
+            location = st.text_input("Název místa")
+            
+            if st.form_submit_button("Uložit vzpomínku"):
+                if text and location:
+                    success, message = add_memory(text, location, lat, lon)
+                    if success:
+                        st.success(message)
+                        st.experimental_rerun()
+                    else:
+                        st.error(message)
+                else:
+                    st.warning("Vyplňte prosím všechna pole")
+
+with tab2:
+    st.header("O aplikaci MemoryMap")
+    
+    # Struktura aplikace
+    st.markdown("""
+    ### Struktura aplikace
+    
+    ```
+    MemoryMap/
+    ├── Frontend (Streamlit)
+    │   └── Interaktivní mapa s možností přidávání vzpomínek
+    │   ├── Backend (FastAPI)
+    │   │   ├── REST API pro správu vzpomínek
+    │   │   └── Analýza textu a extrakce klíčových slov
+    │   └── Database (PostgreSQL + PostGIS)
+    │       └── Geografická databáze vzpomínek
+    ```
+    
+    ### O projektu
+    
+    MemoryMap je interaktivní aplikace pro ukládání a vizualizaci osobních vzpomínek na mapě. 
+    Projekt vznikl jako ukázka technických dovedností při přípravě na pohovor.
+    
+    ### Hlavní funkce
+    
+    - 🗺️ Interaktivní mapa pro zobrazení vzpomínek
+    - 📝 Jednoduché přidávání vzpomínek kliknutím na mapu
+    - 🔍 Automatická analýza textu a extrakce klíčových slov
+    - 🌍 Podpora historických mapových podkladů
+    """)
 
 # Patička aplikace
 st.markdown("---")

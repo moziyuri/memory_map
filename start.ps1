@@ -1,5 +1,9 @@
-# Spuštění backendu
-Start-Process -NoNewWindow powershell -ArgumentList "cd backend; uvicorn main:app --reload"
+# Aktivace virtuálního prostředí
+.\venv\Scripts\activate
+
+# Spuštění backendu v novém okně
+Start-Process powershell -ArgumentList "-NoExit -Command cd backend; uvicorn main:app --reload"
 
 # Spuštění frontendu
-Start-Process -NoNewWindow powershell -ArgumentList "cd frontend; streamlit run app.py" 
+cd frontend
+streamlit run app.py 
