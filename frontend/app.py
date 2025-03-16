@@ -501,6 +501,9 @@ with tab2:
     
     # Aktualizované technologie
     st.subheader("⚙️ Použité technologie")
+    # Nejprve přidám informaci o hlavním programovacím jazyce
+    st.markdown("**Programovací jazyk:** Python 3.9+ (full-stack)")
+
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -549,12 +552,12 @@ with tab2:
     st.markdown("**GitHub:** [github.com/moziyuri/memory_map](https://github.com/moziyuri/memory_map)")
     st.markdown("**Platforma:** Demo aplikace pro technické pohovory")
 
-# Patička aplikace
+# Aktualizuji patičku aplikace s pevně nastaveným rokem 2025
 st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #666; padding: 10px;'>
-        <p>© 2023 MemoryMap | Interaktivní mapa vzpomínek</p>
+        <p>© 2025 MemoryMap | Interaktivní mapa vzpomínek</p>
         <p style='font-size: 0.8em;'>
             <a href='https://github.com/moziyuri/memory_map' target='_blank'>GitHub</a> | 
             <a href='https://github.com/moziyuri/memory_map/blob/master/README.md' target='_blank'>README</a> | 
