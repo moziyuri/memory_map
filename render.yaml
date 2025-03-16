@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: memorymap-api
+    env: python
+    buildCommand: |
+      pip install -r backend/requirements.txt
+      python backend/init_render_db.py
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.12
+      - key: DATABASE_URL
+        fromDatabase:
+          name: memorymap-db
+          property: connectionString
+
+databases:
+  - name: memorymap-db
+    databaseName: memorymap
+    ipAllowList: []
+    plan: free 

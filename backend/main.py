@@ -34,7 +34,8 @@ app.add_middleware(
     allow_origins=[
         "https://stanislavhoracekmemorymap.streamlit.app",
         "http://localhost:8501",  # Pro lokální vývoj
-        "https://localhost:8501"
+        "https://localhost:8501",
+        "https://memorymap-api.onrender.com"  # Render.com URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
