@@ -88,66 +88,42 @@ def get_db():
         # Logging pro diagnostiku
         print(f"Připojuji se k databázi s URL začínajícím: {DATABASE_URL[:10]}...")
         
-        # Jednoduché připojení bez SSL parametrů - zkusíme původní způsob
+        # Zkusíme připojení s explicitními parametry
         try:
-            conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+            from urllib.parse import urlparse
+            parsed = urlparse(DATABASE_URL)
+            
+            # Extrahujeme parametry z URL
+            host = parsed.hostname
+            port = parsed.port or 5432  # Explicitní port 5432 pokud není v URL
+            database = parsed.path[1:] if parsed.path else 'memorymap'
+            user = parsed.username
+            password = parsed.password
+            
+            print(f"Připojuji s parametry: host={host}, port={port}, db={database}, user={user}")
+            
+            conn = psycopg2.connect(
+                host=host,
+                port=port,
+                database=database,
+                user=user,
+                password=password,
+                sslmode='require',
+                connect_timeout=10
+            )
             conn.autocommit = True
             connection_pool = conn
             print("Connection pool úspěšně vytvořen.")
             yield connection_pool
             return
-        except Exception as simple_error:
-            print(f"Jednoduché připojení selhalo: {str(simple_error)}")
-            print("Zkouším připojení s SSL parametry...")
-        
-        # Fallback s SSL parametry
-        ssl_params = {
-            'sslmode': 'require',
-            'sslcert': None,
-            'sslkey': None,
-            'sslrootcert': None
-        }
-        
-        # Pokud connection pool neexistuje, vytvoříme ho
-        if connection_pool is None:
-            try:
-                print("Vytváření nového connection poolu...")
-                # Vytvoříme přímé připojení s SSL parametry
-                conn = psycopg2.connect(DATABASE_URL, **ssl_params)
-                conn.autocommit = True  # Nastavíme autocommit pro jednodušší práci
-                connection_pool = conn
-                print("Connection pool úspěšně vytvořen.")
-            except Exception as e:
-                print(f"Chyba při vytváření connection poolu: {str(e)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Database connection failed: {str(e)}"
-                )
-        
-        # Vracíme existující připojení z poolu
-        try:
-            # Zkontrolujeme, zda je připojení stále aktivní
-            if connection_pool.closed:
-                print("Připojení bylo uzavřeno, vytvořím nové...")
-                connection_pool = psycopg2.connect(DATABASE_URL, **ssl_params)
-                connection_pool.autocommit = True
-                print("Nové připojení úspěšně vytvořeno.")
-                
-            # Vrátíme aktivní připojení - nebudeme ho zavírat, pouze použijeme
-            yield connection_pool
         except Exception as e:
-            print(f"Chyba při získávání připojení z poolu: {str(e)}")
-            # Pokusíme se vytvořit nové připojení
-            try:
-                connection_pool = psycopg2.connect(DATABASE_URL, **ssl_params)
-                connection_pool.autocommit = True
-                yield connection_pool
-            except Exception as new_e:
-                print(f"Nelze vytvořit ani náhradní připojení: {str(new_e)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Database connection failed: {str(new_e)}"
-                )
+            print(f"Chyba při vytváření connection poolu: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database connection failed: {str(e)}"
+            )
+        
+
             
     except Exception as e:
         print(f"Database connection error: {str(e)}")
