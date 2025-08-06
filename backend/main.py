@@ -88,13 +88,20 @@ def get_db():
         # Logging pro diagnostiku
         print(f"Připojuji se k databázi s URL začínajícím: {DATABASE_URL[:10]}...")
         
+        # SSL parametry pro Render.com PostgreSQL
+        ssl_params = {
+            'sslmode': 'require',
+            'sslcert': None,
+            'sslkey': None,
+            'sslrootcert': None
+        }
+        
         # Pokud connection pool neexistuje, vytvoříme ho
         if connection_pool is None:
             try:
                 print("Vytváření nového connection poolu...")
-                # Vytvoříme přímé připojení - connection pool zde není nutný, 
-                # protože FastAPI již řeší konkurenční požadavky
-                conn = psycopg2.connect(DATABASE_URL)
+                # Vytvoříme přímé připojení s SSL parametry
+                conn = psycopg2.connect(DATABASE_URL, **ssl_params)
                 conn.autocommit = True  # Nastavíme autocommit pro jednodušší práci
                 connection_pool = conn
                 print("Connection pool úspěšně vytvořen.")
@@ -110,7 +117,7 @@ def get_db():
             # Zkontrolujeme, zda je připojení stále aktivní
             if connection_pool.closed:
                 print("Připojení bylo uzavřeno, vytvořím nové...")
-                connection_pool = psycopg2.connect(DATABASE_URL)
+                connection_pool = psycopg2.connect(DATABASE_URL, **ssl_params)
                 connection_pool.autocommit = True
                 print("Nové připojení úspěšně vytvořeno.")
                 
@@ -120,7 +127,7 @@ def get_db():
             print(f"Chyba při získávání připojení z poolu: {str(e)}")
             # Pokusíme se vytvořit nové připojení
             try:
-                connection_pool = psycopg2.connect(DATABASE_URL)
+                connection_pool = psycopg2.connect(DATABASE_URL, **ssl_params)
                 connection_pool.autocommit = True
                 yield connection_pool
             except Exception as new_e:

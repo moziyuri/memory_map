@@ -24,7 +24,8 @@ def init_db_direct():
             dbname=dbname,
             user=user,
             password=password,
-            connect_timeout=10
+            connect_timeout=10,
+            sslmode='require'
         )
         conn.autocommit = True
         cur = conn.cursor()

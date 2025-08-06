@@ -53,7 +53,14 @@ def test_connection():
     print("\n3. Pokus o připojení k databázi:")
     try:
         print("Připojování...")
-        conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+        # SSL parametry pro Render.com PostgreSQL
+        ssl_params = {
+            'sslmode': 'require',
+            'sslcert': None,
+            'sslkey': None,
+            'sslrootcert': None
+        }
+        conn = psycopg2.connect(DATABASE_URL, connect_timeout=10, **ssl_params)
         print("✅ Připojení úspěšné!")
         
         # Test dotazu
@@ -116,7 +123,8 @@ def test_connection():
                 dbname=dbname,
                 user=user,
                 password=password,
-                connect_timeout=10
+                connect_timeout=10,
+                sslmode='require'
             )
             print("✅ Alternativní připojení úspěšné!")
             alt_conn.close()

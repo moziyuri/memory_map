@@ -21,8 +21,15 @@ def init_render_db():
     for attempt in range(max_retries):
         try:
             print(f"Pokus o připojení k databázi {attempt + 1}/{max_retries}")
+            # SSL parametry pro Render.com PostgreSQL
+            ssl_params = {
+                'sslmode': 'require',
+                'sslcert': None,
+                'sslkey': None,
+                'sslrootcert': None
+            }
             # Připojení k databázi
-            conn = psycopg2.connect(DATABASE_URL)
+            conn = psycopg2.connect(DATABASE_URL, **ssl_params)
             conn.autocommit = True
             cur = conn.cursor()
             
