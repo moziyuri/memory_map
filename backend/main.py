@@ -102,15 +102,34 @@ def get_db():
             
             print(f"Připojuji s parametry: host={host}, port={port}, db={database}, user={user}")
             
-            conn = psycopg2.connect(
-                host=host,
-                port=port,
-                database=database,
-                user=user,
-                password=password,
-                sslmode='require',
-                connect_timeout=10
-            )
+            # Zkusíme nejdříve bez SSL (jen pro test)
+            try:
+                conn = psycopg2.connect(
+                    host=host,
+                    port=port,
+                    database=database,
+                    user=user,
+                    password=password,
+                    connect_timeout=10
+                )
+                print("✅ Připojení bez SSL úspěšné!")
+            except Exception as no_ssl_error:
+                print(f"Připojení bez SSL selhalo: {str(no_ssl_error)}")
+                print("Zkouším s SSL...")
+                # Fallback s SSL
+                conn = psycopg2.connect(
+                    host=host,
+                    port=port,
+                    database=database,
+                    user=user,
+                    password=password,
+                    sslmode='verify-full',
+                    sslcert=None,
+                    sslkey=None,
+                    sslrootcert=None,
+                    connect_timeout=10
+                )
+                print("✅ Připojení s SSL úspěšné!")
             conn.autocommit = True
             connection_pool = conn
             print("Connection pool úspěšně vytvořen.")
