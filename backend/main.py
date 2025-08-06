@@ -116,7 +116,7 @@ def get_db():
             except Exception as no_ssl_error:
                 print(f"Připojení bez SSL selhalo: {str(no_ssl_error)}")
                 print("Zkouším s SSL...")
-                # Fallback s SSL
+                # Fallback s SSL - použijeme system trusted roots
                 conn = psycopg2.connect(
                     host=host,
                     port=port,
@@ -126,7 +126,7 @@ def get_db():
                     sslmode='verify-full',
                     sslcert=None,
                     sslkey=None,
-                    sslrootcert=None,
+                    sslrootcert='system',  # Použijeme system trusted roots
                     connect_timeout=10
                 )
                 print("✅ Připojení s SSL úspěšné!")
