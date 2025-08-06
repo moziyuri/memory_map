@@ -88,7 +88,19 @@ def get_db():
         # Logging pro diagnostiku
         print(f"Připojuji se k databázi s URL začínajícím: {DATABASE_URL[:10]}...")
         
-        # SSL parametry pro Render.com PostgreSQL
+        # Jednoduché připojení bez SSL parametrů - zkusíme původní způsob
+        try:
+            conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+            conn.autocommit = True
+            connection_pool = conn
+            print("Connection pool úspěšně vytvořen.")
+            yield connection_pool
+            return
+        except Exception as simple_error:
+            print(f"Jednoduché připojení selhalo: {str(simple_error)}")
+            print("Zkouším připojení s SSL parametry...")
+        
+        # Fallback s SSL parametry
         ssl_params = {
             'sslmode': 'require',
             'sslcert': None,
