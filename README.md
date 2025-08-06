@@ -232,6 +232,6 @@ Distribuováno pod MIT licencí. Viz `LICENSE` pro více informací.
 
 ## 📞 Kontakt
 
-Stanislav Horáček - [stanislav.horacek@email.cz](mailto:stanislav.horacek@email.cz)
+Stanislav Horáček - [stanhoracek@gmail.com](mailto:stanhoracek@gmail.com)
 
 Odkaz na projekt: [https://github.com/stanislavhoracek/memorymap](https://github.com/stanislavhoracek/memorymap) 
