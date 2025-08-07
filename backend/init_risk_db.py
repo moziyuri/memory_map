@@ -66,7 +66,7 @@ def init_risk_db():
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
                 description TEXT,
-                location POINT,  -- Geografická pozice
+                location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
                 event_type VARCHAR(50), -- 'flood', 'protest', 'supply_chain', 'geopolitical'
                 severity VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
                 source VARCHAR(100), -- 'chmi_api', 'rss', 'manual', 'copernicus'
@@ -82,7 +82,7 @@ def init_risk_db():
             CREATE TABLE IF NOT EXISTS vw_suppliers (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
-                location POINT,  -- Geografická pozice
+                location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
                 category VARCHAR(100), -- 'electronics', 'tires', 'steering', 'brakes'
                 risk_level VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
                 created_at TIMESTAMP DEFAULT NOW()
@@ -151,7 +151,7 @@ def init_risk_db():
         for event in demo_events:
             cur.execute("""
                 INSERT INTO risk_events (title, description, location, event_type, severity, source)
-                VALUES (%s, %s, point(%s, %s), %s, %s, %s)
+                VALUES (%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s)
                 ON CONFLICT DO NOTHING
             """, event)
         
@@ -173,7 +173,7 @@ def init_risk_db():
         for supplier in demo_suppliers:
             cur.execute("""
                 INSERT INTO vw_suppliers (name, location, category, risk_level)
-                VALUES (%s, point(%s, %s), %s, %s)
+                VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
                 ON CONFLICT DO NOTHING
             """, supplier)
         
