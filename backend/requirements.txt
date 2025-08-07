@@ -5,4 +5,5 @@ python-multipart==0.0.9
 pydantic==2.6.1
 python-dotenv==1.0.1
 geopandas==0.14.3
-shapely==2.0.3 
+shapely==2.0.3
+requests==2.31.0 
