@@ -7,16 +7,25 @@ pro risk analyst feature.
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from typing import Generator
+import os
 
 # Konfigurace pro novou risk analyst databázi
-RISK_DATABASE_CONFIG = {
-    'host': 'dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com',
-    'port': '5432',
-    'dbname': 'risk_analyst',
-    'user': 'risk_analyst_user',
-    'password': 'uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf',
-    'sslmode': 'require'
-}
+def get_risk_db_config():
+    """Získá konfiguraci databáze z environment variables nebo fallback"""
+    # Zkusíme RISK_DATABASE_URL
+    risk_db_url = os.getenv('RISK_DATABASE_URL')
+    if risk_db_url:
+        return risk_db_url
+    
+    # Fallback na přímé hodnoty
+    return {
+        'host': 'dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com',
+        'port': '5432',
+        'dbname': 'risk_analyst',
+        'user': 'risk_analyst_user',
+        'password': 'uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf',
+        'sslmode': 'require'
+    }
 
 def get_risk_db() -> Generator:
     """
@@ -24,14 +33,23 @@ def get_risk_db() -> Generator:
     """
     conn = None
     try:
-        conn = psycopg2.connect(
-            host=RISK_DATABASE_CONFIG['host'],
-            port=RISK_DATABASE_CONFIG['port'],
-            dbname=RISK_DATABASE_CONFIG['dbname'],
-            user=RISK_DATABASE_CONFIG['user'],
-            password=RISK_DATABASE_CONFIG['password'],
-            sslmode=RISK_DATABASE_CONFIG['sslmode']
-        )
+        config = get_risk_db_config()
+        
+        if isinstance(config, str):
+            # Používáme DATABASE_URL
+            if config.startswith('postgres://'):
+                config = config.replace('postgres://', 'postgresql://', 1)
+            conn = psycopg2.connect(config)
+        else:
+            # Používáme přímé hodnoty
+            conn = psycopg2.connect(
+                host=config['host'],
+                port=config['port'],
+                dbname=config['dbname'],
+                user=config['user'],
+                password=config['password'],
+                sslmode=config['sslmode']
+            )
         yield conn
     except Exception as e:
         print(f"Chyba při připojení k risk analyst databázi: {str(e)}")
@@ -43,14 +61,23 @@ def get_risk_db() -> Generator:
 def test_risk_db_connection():
     """Testuje připojení k risk analyst databázi"""
     try:
-        conn = psycopg2.connect(
-            host=RISK_DATABASE_CONFIG['host'],
-            port=RISK_DATABASE_CONFIG['port'],
-            dbname=RISK_DATABASE_CONFIG['dbname'],
-            user=RISK_DATABASE_CONFIG['user'],
-            password=RISK_DATABASE_CONFIG['password'],
-            sslmode=RISK_DATABASE_CONFIG['sslmode']
-        )
+        config = get_risk_db_config()
+        
+        if isinstance(config, str):
+            # Používáme DATABASE_URL
+            if config.startswith('postgres://'):
+                config = config.replace('postgres://', 'postgresql://', 1)
+            conn = psycopg2.connect(config)
+        else:
+            # Používáme přímé hodnoty
+            conn = psycopg2.connect(
+                host=config['host'],
+                port=config['port'],
+                dbname=config['dbname'],
+                user=config['user'],
+                password=config['password'],
+                sslmode=config['sslmode']
+            )
         
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM risk_events")
