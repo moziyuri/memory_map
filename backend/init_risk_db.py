@@ -1,189 +1,218 @@
 """
 Inicializace databáze pro Risk Analyst feature
-
-Tento skript vytvoří nové tabulky pro risk events a související funkce
-pro analýzu rizik dodavatelských řetězců VW Group.
 """
 import psycopg2
-import sys
-import time
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
+import sys
 
 def init_risk_db():
     """Inicializuje databázi pro risk analyst feature"""
     
-    # Používáme původní databázi (stejnou jako v direct_db_init.py)
-    host = "dpg-cn8bjt7109ks7395a720-a.frankfurt-postgres.render.com"
-    port = "5432"
-    dbname = "memorymap"
-    user = "memorymap_user"
-    password = "DY7iZEJA0Oy1GDBRwIlysGb2CkW0zluJ"
+    print("🚀 Spouštím inicializaci risk analyst databáze...")
     
-    print(f"Připojuji se k databázi: {host}:{port}/{dbname} jako {user}")
+    # Zkusíme environment variable, pak fallback
+    database_url = os.getenv('RISK_DATABASE_URL')
+    
+    if database_url:
+        print(f"✅ Používám RISK_DATABASE_URL: {database_url[:20]}...")
+        try:
+            conn = psycopg2.connect(database_url, sslmode='require')
+        except Exception as e:
+            print(f"❌ Chyba při připojení přes DATABASE_URL: {str(e)}")
+            return False
+    else:
+        print("⚠️ RISK_DATABASE_URL není nastavena, používám hardcoded hodnoty")
+        # Fallback na hardcoded hodnoty
+        host = "dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com"
+        port = "5432"
+        dbname = "risk_analyst"
+        user = "risk_analyst_user"
+        password = "uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf"
+        
+        try:
+            conn = psycopg2.connect(
+                host=host,
+                port=port,
+                dbname=dbname,
+                user=user,
+                password=password,
+                sslmode='require'
+            )
+        except Exception as e:
+            print(f"❌ Chyba při připojení: {str(e)}")
+            return False
+    
+    print("✅ Připojení k databázi úspěšné!")
     
     try:
-        conn = psycopg2.connect(
-            host=host,
-            port=port,
-            dbname=dbname,
-            user=user,
-            password=password,
-            connect_timeout=10,
-            sslmode='require'
-        )
-        conn.autocommit = True
         cur = conn.cursor()
         
-        print("Připojení úspěšné!")
-        
-        # 1. Vytvoření PostGIS rozšíření (pokud neexistuje)
-        print("Kontroluji PostGIS rozšíření...")
+        # 1. Kontrola PostGIS
+        print("📊 Kontroluji PostGIS...")
         try:
-            cur.execute('CREATE EXTENSION IF NOT EXISTS postgis;')
-            print("PostGIS rozšíření je dostupné")
+            cur.execute("SELECT PostGIS_Version()")
+            version = cur.fetchone()[0]
+            print(f"✅ PostGIS verze: {version}")
         except Exception as e:
-            print(f"Chyba při kontrole PostGIS: {str(e)}")
+            print(f"❌ PostGIS chyba: {str(e)}")
+            return False
         
-        # 2. Vytvoření hlavní tabulky risk_events
-        print("Vytvářím tabulku risk_events...")
-        try:
-            cur.execute('''
-                CREATE TABLE IF NOT EXISTS risk_events (
-                    id SERIAL PRIMARY KEY,
-                    title VARCHAR(255) NOT NULL,
-                    description TEXT,
-                    location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
-                    event_type VARCHAR(50), -- 'flood', 'protest', 'supply_chain', 'geopolitical'
-                    severity VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
-                    source VARCHAR(100), -- 'chmi_api', 'rss', 'manual', 'copernicus'
-                    url TEXT, -- Zdroj dat
-                    scraped_at TIMESTAMP DEFAULT NOW(),
-                    created_at TIMESTAMP DEFAULT NOW()
-                );
-            ''')
-            print("Tabulka risk_events vytvořena")
-        except Exception as e:
-            print(f"Chyba při vytváření tabulky risk_events: {str(e)}")
+        # 2. Vytvoření tabulek
+        print("🏗️ Vytvářím tabulky...")
+        
+        # Tabulka risk_events
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS risk_events (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                description TEXT,
+                location POINT,  -- Geografická pozice
+                event_type VARCHAR(50), -- 'flood', 'protest', 'supply_chain', 'geopolitical'
+                severity VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
+                source VARCHAR(100), -- 'chmi_api', 'rss', 'manual', 'copernicus'
+                url TEXT, -- Zdroj dat
+                scraped_at TIMESTAMP DEFAULT NOW(),
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        print("✅ Tabulka risk_events vytvořena/zkontrolována")
+        
+        # Tabulka vw_suppliers
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS vw_suppliers (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                location POINT,  -- Geografická pozice
+                category VARCHAR(100), -- 'electronics', 'tires', 'steering', 'brakes'
+                risk_level VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        print("✅ Tabulka vw_suppliers vytvořena/zkontrolována")
         
         # 3. Vytvoření geografických indexů
-        print("Vytvářím geografické indexy...")
+        print("🗺️ Vytvářím geografické indexy...")
         try:
-            cur.execute('CREATE INDEX IF NOT EXISTS idx_risk_events_location ON risk_events USING GIST (location);')
-            cur.execute('CREATE INDEX IF NOT EXISTS idx_risk_events_type ON risk_events (event_type);')
-            cur.execute('CREATE INDEX IF NOT EXISTS idx_risk_events_severity ON risk_events (severity);')
-            cur.execute('CREATE INDEX IF NOT EXISTS idx_risk_events_created_at ON risk_events (created_at);')
-            print("Geografické indexy vytvořeny")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_risk_events_location ON risk_events USING GIST (location);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_suppliers_location ON vw_suppliers USING GIST (location);")
+            print("✅ Geografické indexy vytvořeny")
         except Exception as e:
-            print(f"Chyba při vytváření indexů: {str(e)}")
+            print(f"⚠️ Chyba při vytváření indexů: {str(e)}")
         
-        # 4. Vytvoření tabulky pro dodavatele VW Group
-        print("Vytvářím tabulku vw_suppliers...")
-        try:
-            cur.execute('''
-                CREATE TABLE IF NOT EXISTS vw_suppliers (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    location GEOGRAPHY(POINT, 4326) NOT NULL,
-                    category VARCHAR(100), -- 'electronics', 'tires', 'steering', etc.
-                    risk_level VARCHAR(20) DEFAULT 'medium', -- 'low', 'medium', 'high'
-                    created_at TIMESTAMP DEFAULT NOW()
+        # 4. Vytvoření funkce pro výpočet rizik
+        print("🧮 Vytvářím funkci pro výpočet rizik...")
+        cur.execute("""
+            CREATE OR REPLACE FUNCTION calculate_risk_in_radius(
+                lat DOUBLE PRECISION,
+                lon DOUBLE PRECISION,
+                radius_km INTEGER
+            ) RETURNS TABLE (
+                event_count INTEGER,
+                high_risk_count INTEGER,
+                risk_score NUMERIC
+            ) AS $$
+            BEGIN
+                RETURN QUERY
+                SELECT 
+                    COUNT(*)::INTEGER as event_count,
+                    COUNT(CASE WHEN severity IN ('high', 'critical') THEN 1 END)::INTEGER as high_risk_count,
+                    CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            (COUNT(CASE WHEN severity IN ('high', 'critical') THEN 1 END)::NUMERIC / COUNT(*)::NUMERIC * 100)
+                        ELSE 0 
+                    END as risk_score
+                FROM risk_events
+                WHERE ST_DWithin(
+                    location::geography,
+                    ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+                    radius_km * 1000
                 );
-            ''')
-            print("Tabulka vw_suppliers vytvořena")
-        except Exception as e:
-            print(f"Chyba při vytváření tabulky vw_suppliers: {str(e)}")
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+        print("✅ Funkce calculate_risk_in_radius vytvořena")
         
-        # 5. Vytvoření funkce pro analýzu rizik
-        print("Vytvářím funkci pro analýzu rizik...")
-        try:
-            cur.execute('''
-                CREATE OR REPLACE FUNCTION calculate_risk_in_radius(
-                    point_lat DECIMAL, 
-                    point_lon DECIMAL, 
-                    radius_km INTEGER DEFAULT 50
-                )
-                RETURNS TABLE(
-                    event_count INTEGER,
-                    high_risk_count INTEGER,
-                    risk_score DECIMAL
-                ) AS $$
-                BEGIN
-                    RETURN QUERY
-                    SELECT 
-                        COUNT(*)::INTEGER as event_count,
-                        COUNT(*) FILTER (WHERE severity IN ('high', 'critical'))::INTEGER as high_risk_count,
-                        CASE 
-                            WHEN COUNT(*) = 0 THEN 0.0
-                            ELSE (COUNT(*) FILTER (WHERE severity IN ('high', 'critical'))::DECIMAL / COUNT(*)) * 100
-                        END as risk_score
-                    FROM risk_events
-                    WHERE ST_DWithin(
-                        location::geography, 
-                        ST_SetSRID(ST_MakePoint(point_lon, point_lat), 4326)::geography, 
-                        radius_km * 1000
-                    );
-                END;
-                $$ LANGUAGE plpgsql;
-            ''')
-            print("Funkce calculate_risk_in_radius vytvořena")
-        except Exception as e:
-            print(f"Chyba při vytváření funkce: {str(e)}")
+        # 5. Vložení demo dat
+        print("📝 Vkládám demo data...")
         
-        # 6. Přidání demo dat pro VW Group dodavatele
-        print("Přidávám demo data pro VW Group dodavatele...")
-        try:
-            cur.execute('''
-                INSERT INTO vw_suppliers (name, location, category, risk_level) VALUES
-                ('Bosch Electronics', ST_SetSRID(ST_MakePoint(15.4730, 49.8175), 4326), 'electronics', 'medium'),
-                ('Continental Tires', ST_SetSRID(ST_MakePoint(14.4378, 50.0755), 4326), 'tires', 'low'),
-                ('ZF Steering Systems', ST_SetSRID(ST_MakePoint(16.6068, 49.1951), 4326), 'steering', 'high')
-                ON CONFLICT DO NOTHING;
-            ''')
-            print("Demo data pro dodavatele přidána")
-        except Exception as e:
-            print(f"Chyba při přidávání demo dat: {str(e)}")
+        # Demo risk events
+        demo_events = [
+            ("Záplavy v jižních Čechách", "Silné deště způsobily záplavy v jižních Čechách", 49.0, 14.5, "flood", "high", "chmi_api"),
+            ("Protesty v Praze", "Demonstrace proti vládním opatřením", 50.0755, 14.4378, "protest", "medium", "rss"),
+            ("Dopravní nehoda na D1", "Havárie kamionu blokuje dálnici D1", 49.8, 14.5, "supply_chain", "high", "manual"),
+            ("Politické napětí v regionu", "Eskalace politického napětí", 50.1, 14.4, "geopolitical", "medium", "rss"),
+            ("Povodně na Vltavě", "Vzestup hladiny Vltavy ohrožuje okolní oblasti", 49.2, 14.4, "flood", "critical", "chmi_api"),
+            ("Stávka dopravců", "Stávka dopravních společností", 50.0, 14.3, "supply_chain", "high", "rss"),
+            ("Extrémní počasí", "Silné bouřky a krupobití", 49.5, 14.6, "flood", "medium", "chmi_api"),
+            ("Problémy s dodávkami", "Opoždění dodávek komponentů", 50.2, 14.5, "supply_chain", "medium", "manual"),
+            ("Sociální nepokoje", "Demonstrace a nepokoje", 49.9, 14.4, "protest", "high", "rss")
+        ]
         
-        # 7. Přidání demo risk events
-        print("Přidávám demo risk events...")
-        try:
-            cur.execute('''
-                INSERT INTO risk_events (title, description, location, event_type, severity, source) VALUES
-                ('Záplavy v jižních Čechách', 'Záplavy ovlivňují dodávky z Bosch Electronics', 
-                 ST_SetSRID(ST_MakePoint(15.4730, 49.8175), 4326), 'flood', 'high', 'chmi_api'),
-                ('Protesty v Praze', 'Dopravní omezení v centru Prahy', 
-                 ST_SetSRID(ST_MakePoint(14.4378, 50.0755), 4326), 'protest', 'medium', 'rss'),
-                ('Dopravní nehoda na D1', 'Uzavírka dálnice D1 u Brna', 
-                 ST_SetSRID(ST_MakePoint(16.6068, 49.1951), 4326), 'supply_chain', 'high', 'manual')
-                ON CONFLICT DO NOTHING;
-            ''')
-            print("Demo risk events přidány")
-        except Exception as e:
-            print(f"Chyba při přidávání risk events: {str(e)}")
+        for event in demo_events:
+            cur.execute("""
+                INSERT INTO risk_events (title, description, location, event_type, severity, source)
+                VALUES (%s, %s, point(%s, %s), %s, %s, %s)
+                ON CONFLICT DO NOTHING
+            """, event)
         
-        # 8. Kontrola dat
-        print("Kontroluji počet záznamů...")
-        try:
-            cur.execute("SELECT COUNT(*) FROM risk_events")
-            risk_count = cur.fetchone()[0]
-            print(f"Počet risk events: {risk_count}")
-            
-            cur.execute("SELECT COUNT(*) FROM vw_suppliers")
-            supplier_count = cur.fetchone()[0]
-            print(f"Počet dodavatelů: {supplier_count}")
-        except Exception as e:
-            print(f"Chyba při kontrole dat: {str(e)}")
+        print(f"✅ Vloženo {len(demo_events)} demo risk events")
+        
+        # Demo dodavatelé
+        demo_suppliers = [
+            ("Bosch Electronics", 49.8, 14.4, "electronics", "medium"),
+            ("Continental Tires", 50.1, 14.5, "tires", "low"),
+            ("ZF Steering Systems", 49.9, 14.3, "steering", "high"),
+            ("Brembo Brakes", 50.2, 14.6, "brakes", "medium"),
+            ("Valeo Lighting", 49.7, 14.5, "electronics", "low"),
+            ("Michelin Tires", 50.0, 14.4, "tires", "medium"),
+            ("TRW Safety Systems", 49.6, 14.3, "safety", "high"),
+            ("Delphi Electronics", 50.3, 14.5, "electronics", "medium"),
+            ("Goodyear Tires", 49.5, 14.6, "tires", "low")
+        ]
+        
+        for supplier in demo_suppliers:
+            cur.execute("""
+                INSERT INTO vw_suppliers (name, location, category, risk_level)
+                VALUES (%s, point(%s, %s), %s, %s)
+                ON CONFLICT DO NOTHING
+            """, supplier)
+        
+        print(f"✅ Vloženo {len(demo_suppliers)} demo dodavatelů")
+        
+        conn.commit()
+        print("✅ Všechny změny commitnuty!")
+        
+        # 6. Kontrola výsledku
+        cur.execute("SELECT COUNT(*) FROM risk_events")
+        events_count = cur.fetchone()[0]
+        
+        cur.execute("SELECT COUNT(*) FROM vw_suppliers")
+        suppliers_count = cur.fetchone()[0]
+        
+        print(f"📊 Finální stav:")
+        print(f"   - Risk events: {events_count}")
+        print(f"   - Suppliers: {suppliers_count}")
         
         conn.close()
-        print("✅ Inicializace risk analyst databáze dokončena!")
+        print("🎉 Inicializace risk analyst databáze dokončena úspěšně!")
         return True
         
     except Exception as e:
-        print(f"❌ Chyba při připojení k databázi: {str(e)}")
+        print(f"❌ Chyba při inicializaci: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 if __name__ == "__main__":
+    print("=" * 50)
+    print("RISK ANALYST DATABASE INITIALIZATION")
+    print("=" * 50)
+    
     success = init_risk_db()
-    sys.exit(0 if success else 1) 
+    
+    if success:
+        print("✅ Inicializace úspěšná!")
+        sys.exit(0)
+    else:
+        print("❌ Inicializace selhala!")
+        sys.exit(1) 

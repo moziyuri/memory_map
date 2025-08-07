@@ -703,10 +703,45 @@ if __name__ == "__main__":
 # RISK ANALYST FEATURE - Nové modely a endpointy pro VW Group
 # ============================================================================
 
-# Používáme původní databázi pro risk analyst feature
+# Přímé připojení k risk analyst databázi
 def get_risk_db():
-    """Používá původní databázi pro risk analyst feature"""
-    return get_db()
+    """Připojení k risk analyst databázi"""
+    import psycopg2
+    import os
+    from typing import Generator
+    
+    # Zkusíme environment variable, pak fallback na hardcoded
+    database_url = os.getenv('RISK_DATABASE_URL')
+    
+    if database_url:
+        # Použijeme DATABASE_URL format
+        try:
+            conn = psycopg2.connect(database_url, sslmode='require')
+            yield conn
+        except Exception as e:
+            print(f"Chyba při připojení přes DATABASE_URL: {str(e)}")
+            raise
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    else:
+        # Fallback na hardcoded hodnoty
+        try:
+            conn = psycopg2.connect(
+                host="dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com",
+                port="5432",
+                dbname="risk_analyst",
+                user="risk_analyst_user",
+                password="uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf",
+                sslmode='require'
+            )
+            yield conn
+        except Exception as e:
+            print(f"Chyba při připojení k risk analyst databázi: {str(e)}")
+            raise
+        finally:
+            if 'conn' in locals():
+                conn.close()
 
 # Nové Pydantic modely pro risk events
 class RiskEventCreate(BaseModel):
@@ -733,7 +768,7 @@ class RiskEventResponse(BaseModel):
     created_at: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class SupplierResponse(BaseModel):
     id: int
@@ -745,7 +780,7 @@ class SupplierResponse(BaseModel):
     created_at: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class RiskAnalysisResponse(BaseModel):
     event_count: int
@@ -804,14 +839,21 @@ async def get_risk_events(
             
             query += " ORDER BY created_at DESC"
             
+            print(f"Executing query: {query}")
+            print(f"With params: {params}")
+            
             cur.execute(query, params)
             results = cur.fetchall()
+            
+            print(f"Found {len(results)} results")
             
             return [dict(row) for row in results]
             
     except Exception as e:
         print(f"Chyba při získávání risk events: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.post("/api/risks", response_model=RiskEventResponse, status_code=201)
 async def create_risk_event(risk: RiskEventCreate):
@@ -1056,4 +1098,17 @@ async def run_all_scrapers():
     return {
         "message": "Web scraping bude implementován v další fázi",
         "status": "placeholder"
+    } 
+
+@app.get("/api/debug-env")
+async def debug_environment():
+    """Debug endpoint pro ověření environment variables"""
+    import os
+    
+    return {
+        "RISK_DATABASE_URL": os.getenv('RISK_DATABASE_URL', 'NOT_SET'),
+        "DATABASE_URL": os.getenv('DATABASE_URL', 'NOT_SET'),
+        "PYTHON_VERSION": os.getenv('PYTHON_VERSION', 'NOT_SET'),
+        "PORT": os.getenv('PORT', 'NOT_SET'),
+        "message": "Environment variables debug"
     } 
