@@ -785,7 +785,7 @@ class RiskAnalysisResponse(BaseModel):
 # RISK EVENTS API ENDPOINTS
 # ============================================================================
 
-@app.get("/api/risks", response_model=List[RiskEventResponse])
+@app.get("/api/risks")
 async def get_risk_events(
     event_type: Optional[str] = None,
     severity: Optional[str] = None,
