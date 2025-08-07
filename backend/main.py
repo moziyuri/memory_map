@@ -802,7 +802,9 @@ async def get_risk_events(
     """Získá risk events s filtry"""
     conn = None
     try:
+        print("🔍 Spouštím get_risk_events...")
         conn = next(get_risk_db())
+        print("✅ Připojení k databázi OK")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Základní dotaz
@@ -839,18 +841,35 @@ async def get_risk_events(
             
             query += " ORDER BY created_at DESC"
             
-            print(f"Executing query: {query}")
-            print(f"With params: {params}")
+            print(f"🔍 Executing query: {query}")
+            print(f"🔍 With params: {params}")
             
             cur.execute(query, params)
             results = cur.fetchall()
             
-            print(f"Found {len(results)} results")
+            print(f"✅ Found {len(results)} results")
             
-            return [dict(row) for row in results]
+            # Debug: vypíšeme první výsledek
+            if results:
+                first_result = dict(results[0])
+                print(f"🔍 First result keys: {list(first_result.keys())}")
+                print(f"🔍 First result: {first_result}")
+            
+            # Konverze na response modely
+            response_data = []
+            for row in results:
+                row_dict = dict(row)
+                # Zajistíme správné datové typy
+                row_dict['latitude'] = float(row_dict['latitude'])
+                row_dict['longitude'] = float(row_dict['longitude'])
+                row_dict['id'] = int(row_dict['id'])
+                response_data.append(row_dict)
+            
+            print(f"✅ Returning {len(response_data)} items")
+            return response_data
             
     except Exception as e:
-        print(f"Chyba při získávání risk events: {str(e)}")
+        print(f"❌ Chyba při získávání risk events: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
