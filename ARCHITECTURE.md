@@ -1,21 +1,21 @@
-# Architektura projektu MemoryMap
+# Architektura projektu VW Group Risk Analyst Dashboard
 
-> **Aplikace vytvořená za účelem pohovoru** - Tento projekt demonstruje praktické dovednosti v oblasti full-stack vývoje.
+> **Aplikace vytvořená za účelem pohovoru na pozici Risk Analyst** - Tento projekt demonstruje praktické dovednosti v oblasti full-stack vývoje, web scraping, GIS analýzy a supply chain risk management.
 
 ## Přehled
 
-MemoryMap je full-stack aplikace se třemi hlavními komponentami:
+VW Group Risk Analyst Dashboard je full-stack aplikace se třemi hlavními komponentami:
 
 1. **Frontend** (Streamlit) - Uživatelské rozhraní postavené na Streamlit frameworku
-2. **Backend API** (FastAPI) - REST API poskytující přístup k datům
-3. **PostgreSQL databáze** - Úložiště pro vzpomínky s PostGIS rozšířením pro geografická data
+2. **Backend API** (FastAPI) - REST API poskytující přístup k datům a web scraping
+3. **PostgreSQL databáze** - Úložiště pro rizikové události a dodavatele s PostGIS rozšířením
 
 ```
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
 │                 │      │                 │      │                 │
 │   Frontend      │◄────►│   Backend API   │◄────►│   PostgreSQL    │
 │   (Streamlit)   │      │   (FastAPI)     │      │   + PostGIS     │
-│                 │      │                 │      │                 │
+│                 │      │   + Web Scraping│      │                 │
 └─────────────────┘      └─────────────────┘      └─────────────────┘
      Streamlit               Render.com               Render.com
 ```
@@ -24,23 +24,24 @@ MemoryMap je full-stack aplikace se třemi hlavními komponentami:
 
 ### 1. Frontend (Streamlit)
 
-- **Technologie**: Streamlit, Folium, Streamlit-Folium
+- **Technologie**: Streamlit, Folium, Streamlit-Folium, Pandas
 - **Odpovědnost**: 
-  - Zobrazení interaktivní mapy s piny reprezentujícími vzpomínky
-  - Zobrazení pop-up oken s obsahem vzpomínek po kliknutí na pin
-  - Umožnění přidávání nových vzpomínek přímým kliknutím na mapu
-  - Formulář pro zadání detailů vzpomínky
-  - Vyhledávání a filtrování vzpomínek
+  - Zobrazení interaktivní mapy s rizikovými událostmi a dodavateli VW Group
+  - Filtry podle typu události, závažnosti, zdroje dat a časového období
+  - Statistiky a trendy rizikových událostí
+  - Analýza dodavatelů s rizikovým hodnocením
+  - Geografické omezení na území České republiky
   - Komunikace s Backend API
 
 ### 2. Backend API (FastAPI)
 
-- **Technologie**: FastAPI, Pydantic, psycopg2
+- **Technologie**: FastAPI, Pydantic, psycopg2, Requests, xml.etree.ElementTree
 - **Odpovědnost**:
   - Poskytování REST API endpointů
+  - Web scraping reálných dat z CHMI API a RSS feeds
   - Zpracování a validace dat
-  - Extrakce klíčových slov z textu vzpomínek
-  - Ukládání geografických dat získaných z kliknutí na mapu
+  - Analýza rizikových klíčových slov
+  - Ukládání geografických dat rizikových událostí
   - Komunikace s databází
   - API dokumentace (Swagger)
 
@@ -48,24 +49,38 @@ MemoryMap je full-stack aplikace se třemi hlavními komponentami:
 
 - **Technologie**: PostgreSQL, PostGIS, fuzzystrmatch
 - **Odpovědnost**:
-  - Ukládání vzpomínek a jejich metadat
-  - Ukládání geografických bodů (pinů) pomocí PostGIS
+  - Ukládání rizikových událostí a jejich metadat
+  - Ukládání dodavatelů VW Group s rizikovým hodnocením
+  - Ukládání geografických bodů pomocí PostGIS
   - Geografické dotazy a operace pomocí PostGIS
-  - Fulltextové vyhledávání
+  - Výpočet rizik v okolí dodavatelů
 
 ## Datový model
 
-### Tabulka `memories`
+### Tabulka `risk_events`
 
 ```sql
-CREATE TABLE memories (
+CREATE TABLE risk_events (
     id SERIAL PRIMARY KEY,
-    text TEXT NOT NULL,
-    location VARCHAR(255) NOT NULL,
-    coordinates GEOGRAPHY(POINT, 4326) NOT NULL,
-    keywords TEXT[],
-    source TEXT,
-    date TEXT,
+    title TEXT NOT NULL,
+    description TEXT,
+    event_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    source VARCHAR(50) NOT NULL,
+    location GEOGRAPHY(POINT, 4326),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Tabulka `vw_suppliers`
+
+```sql
+CREATE TABLE vw_suppliers (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    risk_level VARCHAR(20) NOT NULL,
+    location GEOGRAPHY(POINT, 4326),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -74,13 +89,40 @@ CREATE TABLE memories (
 
 ### Backend API
 
-| Metoda | Endpoint            | Popis                                     |
-|--------|---------------------|-------------------------------------------|
-| GET    | /                   | Základní health check                     |
-| GET    | /api/memories       | Získání všech vzpomínek včetně souřadnic pro zobrazení pinů |
-| GET    | /api/memories/{id}  | Získání konkrétní vzpomínky podle ID      |
-| POST   | /api/analyze        | Přidání nové vzpomínky, zpracování souřadnic z kliknutí na mapu a extrakce klíčových slov |
-| GET    | /api/debug          | Diagnostika stavu API a připojení k DB    |
+| Metoda | Endpoint                    | Popis                                     |
+|--------|----------------------------|-------------------------------------------|
+| GET    | /                          | Základní health check                     |
+| GET    | /api/risks                 | Získání všech rizikových událostí         |
+| GET    | /api/suppliers             | Získání všech dodavatelů VW Group         |
+| GET    | /api/analysis/risk-map     | Získání dat pro mapu rizik                |
+| GET    | /api/scrape/chmi           | Spuštění web scraping z CHMI API          |
+| GET    | /api/scrape/rss            | Spuštění web scraping z RSS feeds         |
+| GET    | /api/scrape/run-all        | Spuštění všech web scrapers               |
+| GET    | /docs                      | API dokumentace (Swagger)                 |
+
+## Zdroje dat
+
+### Reálná data (Web Scraping)
+
+#### CHMI API
+- **Endpointy**: 
+  - `https://hydro.chmi.cz/hpps/hpps_act.php`
+  - `https://hydro.chmi.cz/hpps/hpps_act_quick.php`
+- **Typ dat**: Meteorologická varování, povodňové informace
+- **Frekvence**: Při volání `/api/scrape/chmi`
+
+#### RSS Feeds
+- **Zdroje**:
+  - `https://www.novinky.cz/rss`
+  - `https://www.seznamzpravy.cz/rss`
+  - `https://hn.cz/rss/2`
+  - `https://www.irozhlas.cz/rss/irozhlas`
+- **Typ dat**: Zprávy z českých médií
+- **Frekvence**: Při volání `/api/scrape/rss`
+
+### Demo data
+- **Dodavatelé VW Group**: Fiktivní dodavatelé s rizikovým hodnocením
+- **Rizikové události**: Historické události pro demonstraci funkcí
 
 ## Nasazení
 
@@ -91,86 +133,41 @@ CREATE TABLE memories (
 
 ### Backend API (Render.com)
 
-- **URL**: https://memory-map.onrender.com
+- **URL**: https://risk-analyst.onrender.com
 - **Proces nasazení**: 
   1. Web Service na Render.com
-  2. Build Command: `pip install -r backend/requirements.txt && python backend/direct_db_init.py`
-  3. Start Command: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+  2. Build Command: `pip install -r requirements.txt && python init_risk_db.py`
+  3. Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+  4. Environment Variables:
+     - `RISK_DATABASE_URL`: PostgreSQL connection string
+     - `DATABASE_URL`: PostgreSQL connection string
 
 ### PostgreSQL (Render.com)
 
-- **Typ**: Managed PostgreSQL databáze
-- **Konfigurace**:
-  - PostGIS rozšíření
-  - Automatické zálohování
-  - Connection string propojený s Backend API
+- **Databáze**: `risk_analyst`
+- **Rozšíření**: PostGIS pro geografické operace
+- **Inicializace**: Automaticky při build procesu pomocí `init_risk_db.py`
 
-## Workflow aplikace
+## Bezpečnost a optimalizace
 
-1. Uživatel navštíví Streamlit aplikaci
-2. Frontend načte vzpomínky z Backend API
-3. Vzpomínky jsou zobrazeny jako piny na interaktivní mapě
-4. Uživatel může kliknout na pin pro zobrazení obsahu vzpomínky v pop-up okně
-5. Při přidání nové vzpomínky:
-   - Uživatel klikne na tlačítko "Přidat vzpomínku"
-   - Poté klikne na požadované místo na mapě
-   - Vyplní formulář s detaily vzpomínky
-   - Frontend odešle data včetně souřadnic kliknutí do Backend API
-   - Backend extrahuje klíčová slova
-   - Backend uloží data do PostgreSQL databáze
-   - Backend vrátí aktualizovaný seznam vzpomínek
-   - Na mapě se objeví nový pin
+### Render.com Free plán limity
+- **Web Service**: 512 MB RAM, uspání po 15 minutách neaktivity
+- **PostgreSQL**: 1 GB prostoru, max 10 současných připojení
 
-## Interaktivní prvky mapy
+### Optimalizace
+- Geografické omezení na ČR pro snížení datového objemu
+- Cachování dat v session state
+- Efektivní dotazy s PostGIS indexy
+- Minimalizace API volání
 
-### Piny
+## Monitoring a logování
 
-- Piny jsou interaktivní značky na mapě reprezentující jednotlivé vzpomínky
-- Každý pin má:
-  - Pozici určenou geografickými souřadnicemi (latitude, longitude)
-  - Návaznost na konkrétní vzpomínku v databázi
-  - Pop-up okno, které se aktivuje po kliknutí
+### Backend logování
+- Detailní print statements pro debugging
+- Error handling s traceback
+- API response logging
 
-### Pop-up okna
-
-- Pop-up okna se zobrazují po kliknutí na pin
-- Obsahují:
-  - Text vzpomínky
-  - Název místa
-  - Datum a zdroj (pokud byly zadány)
-  - Automaticky extrahovaná klíčová slova
-
-### Přidávání vzpomínek
-
-- Přímé kliknutí na mapu v režimu přidávání
-- Automatická extrakce souřadnic z místa kliknutí
-- Reverzní geokódování pro získání názvu místa (pokud je dostupné)
-
-## Monitoring a diagnostika
-
-Pro diagnostiku a monitoring aplikace slouží:
-
-- **API endpoint** `/api/debug` - Poskytuje informace o:
-  - Stavu připojení k databázi
-  - Verzi PostgreSQL a PostGIS
-  - Dostupných tabulkách
-  - Počtu uložených vzpomínek
-  - Environment proměnných (bezpečně)
-
-- **Swagger dokumentace** na `/docs` - Interaktivní dokumentace API
-
-## Bezpečnost
-
-- Použití CORS policy pro omezení přístupu k API
-- PostgreSQL připojení přes connection string s heslem
-- Žádné ukládání citlivých údajů do kódu
-- Validace vstupních dat pomocí Pydantic modelů
-
-## Účel projektu
-
-Aplikace MemoryMap byla vytvořena jako ukázka technických dovedností pro účely pracovního pohovoru. Demonstruje praktické schopnosti v oblastech:
-
-- Vývoje full-stack webových aplikací
-- Práce s geografickými daty a interaktivními mapami
-- Návrhu a implementace REST API
-- Integrace moderních technologií a frameworků 
+### Frontend monitoring
+- Session state pro cachování
+- Error handling pro API volání
+- User feedback pro všechny operace 

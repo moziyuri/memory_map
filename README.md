@@ -1,62 +1,68 @@
-# MemoryMap
+# VW Group Risk Analyst Dashboard
 
-> **Aplikace vytvořená za účelem pohovoru** - Projekt demonstruje praktické dovednosti v oblasti full-stack vývoje, práce s mapovými podklady a zpracování geografických dat.
+> **Aplikace vytvořená za účelem pohovoru na pozici Risk Analyst** - Projekt demonstruje praktické dovednosti v oblasti full-stack vývoje, web scraping, GIS analýzy a supply chain risk management.
 
-Aplikace pro ukládání a vizualizaci vzpomínek spojených s konkrétními geografickými místy na mapě.
+Interaktivní dashboard pro analýzu rizikových událostí v dodavatelském řetězci VW Group s využitím reálných dat z CHMI API a RSS feeds.
 
-![MemoryMap Preview](https://i.imgur.com/example.png)
+![Risk Analyst Dashboard Preview](https://i.imgur.com/example.png)
 
 ## 🌟 Funkce
 
-- **Interaktivní mapa** zobrazující vzpomínky ve formě pinů na mapě
-- **Přidávání vzpomínek přímo kliknutím na mapu** s textem, místem, datem a zdrojem
-- **Pop-up okna** pro rychlé zobrazení obsahu vzpomínek přímo na mapě
-- **Automatická extrakce klíčových slov** z textu vzpomínek
-- **Vyhledávání a filtrování** vzpomínek podle textu, klíčových slov, místa a data
+- **Interaktivní mapa rizik** zobrazující rizikové události a dodavatele VW Group
+- **Web scraping** reálných dat z CHMI (počasí) a RSS feeds (zprávy)
+- **Filtry** podle typu události, závažnosti, zdroje dat a časového období
+- **Analýza dodavatelů** s rizikovým hodnocením a kategorizací
+- **Statistiky a trendy** rizikových událostí v čase
+- **Geografické omezení** na území České republiky
 - **Responzivní design** pro používání na počítači i mobilních zařízeních
 
 ## 🔗 Odkazy
 
 - **Frontend**: [https://stanislavhoracekmemorymap.streamlit.app](https://stanislavhoracekmemorymap.streamlit.app)
-- **Backend API**: [https://memory-map.onrender.com](https://memory-map.onrender.com)
-- **API dokumentace**: [https://memory-map.onrender.com/docs](https://memory-map.onrender.com/docs)
-- **API diagnostika**: [https://memory-map.onrender.com/api/debug](https://memory-map.onrender.com/api/debug)
+- **Backend API**: [https://risk-analyst.onrender.com](https://risk-analyst.onrender.com)
+- **API dokumentace**: [https://risk-analyst.onrender.com/docs](https://risk-analyst.onrender.com/docs)
 
 ## 📖 O aplikaci
 
-MemoryMap je interaktivní aplikace pro mapování vzpomínek, která vznikla jako ukázka dovedností pro účely pohovoru. Projekt demonstruje schopnosti v těchto oblastech:
+VW Group Risk Analyst Dashboard je interaktivní aplikace pro analýzu rizik v dodavatelském řetězci, která vznikla jako ukázka dovedností pro účely pohovoru na pozici Risk Analyst. Projekt demonstruje schopnosti v těchto oblastech:
 
 ### Účel a vznik
-Aplikace byla vytvořena specificky pro demonstraci technických dovedností v kontextu pracovního pohovoru. Cílem bylo vytvořit funkční a esteticky přívětivou aplikaci, která ukáže schopnosti práce s moderními technologiemi a frameworks.
+Aplikace byla vytvořena specificky pro demonstraci technických dovedností v kontextu pracovního pohovoru na pozici Risk Analyst ve VW Group. Cílem bylo vytvořit funkční dashboard, který ukáže schopnosti práce s:
+- Web scraping reálných dat
+- GIS analýzou a geografickými daty
+- Supply chain risk management
+- Moderními technologiemi a frameworks
 
 ### Koncept
-Základní myšlenkou je možnost ukládat vzpomínky a příběhy spojené s konkrétními místy na mapě. Uživatelé mohou:
-- Procházet mapu a zobrazovat existující vzpomínky kliknutím na pin
-- Přidávat nové vzpomínky jednoduchým kliknutím na místo na mapě
-- Vyhledávat vzpomínky podle obsahu, místa nebo automaticky extrahovaných klíčových slov
+Základní myšlenkou je monitoring rizikových událostí, které mohou ovlivnit dodavatelský řetězec VW Group. Aplikace:
+- Sbírá reálná data z CHMI API (počasí) a RSS feeds (zprávy)
+- Analyzuje rizika v okolí dodavatelů VW Group
+- Poskytuje přehledné statistiky a trendy
+- Umožňuje filtrování a analýzu podle různých kritérií
 
 ### Technologická ukázka
 Aplikace demonstruje zkušenosti s:
-- Tvorbou moderních full-stack aplikací
+- Web scraping a práci s externími API
+- GIS analýzou a geografickými daty
+- Supply chain risk management
 - Vývojem interaktivních mapových rozhraní
-- Práci s geografickými daty a PostgreSQL/PostGIS
 - Návrhem a implementací REST API
 - Nasazením aplikací na cloud platformy
 
 ## 🏗️ Architektura
 
-MemoryMap je full-stack aplikace se třemi hlavními komponentami:
+Risk Analyst Dashboard je full-stack aplikace se třemi hlavními komponentami:
 
 1. **Frontend** (Streamlit) - Uživatelské rozhraní postavené na Streamlit frameworku
-2. **Backend API** (FastAPI) - REST API poskytující přístup k datům
-3. **PostgreSQL databáze** - Úložiště pro vzpomínky s PostGIS rozšířením pro geografická data
+2. **Backend API** (FastAPI) - REST API poskytující přístup k datům a web scraping
+3. **PostgreSQL databáze** - Úložiště pro rizikové události a dodavatele s PostGIS rozšířením
 
 ```
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
 │                 │      │                 │      │                 │
 │   Frontend      │◄────►│   Backend API   │◄────►│   PostgreSQL    │
 │   (Streamlit)   │      │   (FastAPI)     │      │   + PostGIS     │
-│                 │      │                 │      │                 │
+│                 │      │   + Web Scraping│      │                 │
 └─────────────────┘      └─────────────────┘      └─────────────────┘
      Streamlit               Render.com               Render.com
 ```
@@ -69,169 +75,115 @@ MemoryMap je full-stack aplikace se třemi hlavními komponentami:
 - **Streamlit** - Framework pro rychlé vytváření datových aplikací
 - **Folium** - Knihovna pro vytváření interaktivních map s podporou pop-up oken a pinů
 - **Streamlit-Folium** - Integrace Folium map do Streamlit aplikací
+- **Pandas** - Analýza a zpracování dat
 - **Python** - Programovací jazyk
 
 ### Backend
-- **FastAPI** - Moderní, rychlý (vysoce výkonný) webový framework pro tvorbu API
+- **FastAPI** - Moderní, rychlý webový framework pro tvorbu API
 - **Pydantic** - Validace dat a nastavení pomocí anotací typu Python
 - **PostgreSQL** - Relační databáze
 - **PostGIS** - Prostorové rozšíření pro PostgreSQL
 - **psycopg2** - PostgreSQL adaptér pro Python
+- **Requests** - HTTP knihovna pro web scraping
+- **xml.etree.ElementTree** - Parsování RSS feeds
 - **uvicorn** - ASGI server pro Python
 
 ## 🧱 Struktura projektu
 
 ```
-memorymap/
+risk-analyst-dashboard/
 ├── frontend/              # Streamlit aplikace
 │   ├── app.py             # Hlavní soubor aplikace
-│   ├── utils.py           # Pomocné funkce
 │   └── requirements.txt   # Závislosti pro frontend
 │
 ├── backend/               # FastAPI backend
-│   ├── main.py            # Hlavní soubor API
-│   ├── database.py        # Konfigurace databáze
-│   ├── models.py          # Pydantic modely
-│   ├── direct_db_init.py  # Inicializační skript pro databázi
+│   ├── main.py            # Hlavní soubor API s web scraping
+│   ├── init_risk_db.py    # Inicializační skript pro databázi
+│   ├── test_risk_db.py    # Test připojení k databázi
 │   └── requirements.txt   # Závislosti pro backend
 │
+├── database/              # SQL skripty
+│   ├── init.sql           # Základní inicializace databáze
+│   └── memories_data.sql  # Demo data
+│
 ├── README.md              # Tento soubor
+├── RISK_ANALYST_PROJECT.md # Detailní plán projektu
 ├── ARCHITECTURE.md        # Detailní popis architektury
+├── DEPLOYMENT.md          # Instrukce pro nasazení
 └── USER_GUIDE.md          # Uživatelská příručka
 ```
 
-## 🚀 Nasazení
+## 📊 Zdroje dat
 
-### Frontend (Streamlit Cloud)
+### Reálná data
+- **CHMI API** - Meteorologická data a varování (počasí, povodně)
+- **RSS feeds** - Zprávy z českých médií (Novinky.cz, Seznam Zprávy, HN.cz, iRozhlas)
 
-1. Automatický deployment z GitHub repozitáře
-2. Nastavení v `.streamlit/secrets.toml`:
-   ```toml
-   [api]
-   url = "https://memory-map.onrender.com"
-   ```
+### Demo data
+- **Dodavatelé VW Group** - Fiktivní dodavatelé s rizikovým hodnocením
+- **Rizikové události** - Historické události pro demonstraci funkcí
 
-### Backend API (Render.com)
+## 🚀 Rychlý start
 
-1. Vytvoření Web Service na Render.com
-2. Build Command:
-   ```
-   pip install -r backend/requirements.txt && python backend/direct_db_init.py
-   ```
-3. Start Command:
-   ```
-   cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
-   ```
-4. Environment Variables:
-   ```
-   DATABASE_URL=postgres://[username]:[password]@[host]:[port]/[database]
-   ```
+### Lokální spuštění
 
-### PostgreSQL (Render.com)
-
-1. Vytvoření PostgreSQL databáze na Render.com
-2. Aktivace PostGIS rozšíření:
-   ```sql
-   CREATE EXTENSION postgis;
-   CREATE EXTENSION fuzzystrmatch;
-   ```
-3. Inicializace databázové struktury pomocí `direct_db_init.py`
-
-### Limity Free plánu a optimalizace
-
-> ⚠️ **Důležité**: Render.com Free plán má následující limity:
-> - Web Service: 512 MB RAM, uspání po 15 minutách neaktivity
-> - PostgreSQL: 1 GB prostoru, max 10 současných připojení
->
-> Pro detailní informace o omezeních a praktické tipy k optimalizaci viz sekce [Limity free plánu](DEPLOYMENT.md#6-limity-free-plánu-na-rendercom-a-jejich-dodržování) v dokumentu DEPLOYMENT.md.
-
-## 📦 API Endpointy
-
-| Metoda | Endpoint            | Popis                                     |
-|--------|---------------------|-------------------------------------------|
-| GET    | /                   | Základní health check                     |
-| GET    | /api/memories       | Získání všech vzpomínek                   |
-| GET    | /api/memories/{id}  | Získání konkrétní vzpomínky podle ID      |
-| POST   | /api/analyze        | Přidání nové vzpomínky a extrakce klíčových slov |
-| GET    | /api/debug          | Diagnostika stavu API a připojení k DB    |
-
-## 📝 Použití
-
-Detailní návod na používání aplikace najdete v [uživatelské příručce](USER_GUIDE.md).
-
-### Rychlý start:
-
-1. Otevřete [aplikaci](https://stanislavhoracekmemorymap.streamlit.app)
-2. Prozkoumejte mapu s existujícími vzpomínkami kliknutím na piny
-3. Přidejte vlastní vzpomínku kliknutím na požadované místo na mapě
-4. Vyhledávejte a filtrujte vzpomínky dle potřeby
-
-## 🧪 Lokální vývoj
-
-### Prerekvizity
-
-- Python 3.9+
-- PostgreSQL s PostGIS rozšířením
-
-### Nastavení projektu
-
-1. Klonování repozitáře:
+1. **Klonování repozitáře**
    ```bash
-   git clone https://github.com/stanislavhoracek/memorymap.git
-   cd memorymap
+   git clone https://github.com/username/risk-analyst-dashboard.git
+   cd risk-analyst-dashboard
    ```
 
-2. Instalace závislostí pro backend:
+2. **Instalace závislostí**
    ```bash
+   # Backend
    cd backend
+   pip install -r requirements.txt
+   
+   # Frontend
+   cd ../frontend
    pip install -r requirements.txt
    ```
 
-3. Instalace závislostí pro frontend:
+3. **Spuštění aplikace**
    ```bash
-   cd frontend
-   pip install -r requirements.txt
-   ```
-
-4. Konfigurace databáze:
-   - Vytvořte PostgreSQL databázi
-   - Aktivujte PostGIS rozšíření
-   - Nastavte proměnnou prostředí `DATABASE_URL`
-
-5. Inicializace databáze:
-   ```bash
-   cd backend
-   python direct_db_init.py
-   ```
-
-6. Spuštění backend API:
-   ```bash
-   cd backend
-   uvicorn main:app --reload
-   ```
-
-7. Spuštění frontend aplikace:
-   ```bash
-   cd frontend
+   # Backend (v adresáři backend)
+   python main.py
+   
+   # Frontend (v adresáři frontend)
    streamlit run app.py
    ```
 
+### Nasazení na cloud
+
+Aplikace je nasazena na:
+- **Backend**: Render.com (FastAPI + PostgreSQL)
+- **Frontend**: Streamlit Cloud
+
+## 📈 Funkce pro Risk Analyst
+
+### Web Scraping
+- Automatické sbírání dat z CHMI API
+- Parsování RSS feeds z českých médií
+- Analýza obsahu pro rizikové klíčová slova
+
+### GIS Analýza
+- Geografické omezení na ČR
+- Výpočet rizik v okolí dodavatelů
+- Vizualizace na interaktivní mapě
+
+### Supply Chain Risk Management
+- Monitoring dodavatelů VW Group
+- Kategorizace podle typu dodavatele
+- Rizikové hodnocení a scoring
+
 ## 🤝 Přispívání
 
-Příspěvky jsou vítány! Pokud chcete přispět k projektu:
-
-1. Forkněte repozitář
-2. Vytvořte novou větev (`git checkout -b feature/amazing-feature`)
-3. Commitněte vaše změny (`git commit -m 'Add some amazing feature'`)
-4. Pushněte do větve (`git push origin feature/amazing-feature`)
-5. Vytvořte Pull Request
+Projekt byl vytvořen jako ukázka dovedností pro pohovor. Pro jakékoliv dotazy kontaktujte autora.
 
 ## 📄 Licence
 
-Distribuováno pod MIT licencí. Viz `LICENSE` pro více informací.
+Tento projekt je vytvořen pro demonstrační účely.
 
-## 📞 Kontakt
+---
 
-Stanislav Horáček - [stanhoracek@gmail.com](mailto:stanhoracek@gmail.com)
-
-Odkaz na projekt: [https://github.com/stanislavhoracek/memorymap](https://github.com/stanislavhoracek/memorymap) 
+**Vytvořeno pro VW Group Risk Analyst pozici - 2025** 
