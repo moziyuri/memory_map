@@ -3,9 +3,13 @@ services:
     name: memory-map-risk-analyst
     env: python
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && python init_risk_db.py && uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: |
+      pip install -r backend/requirements.txt
+      python backend/init_risk_db.py
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.12
       - key: DATABASE_URL
         value: postgresql://risk_analyst_user:uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf@dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com/risk_analyst
       - key: RISK_DATABASE_URL
