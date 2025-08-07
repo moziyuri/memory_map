@@ -704,7 +704,14 @@ if __name__ == "__main__":
 # ============================================================================
 
 # Import konfigurace pro risk analyst databázi
-from risk_db_config import get_risk_db
+try:
+    from risk_db_config import get_risk_db
+except ImportError:
+    # Fallback pro případ, že risk_db_config není dostupný
+    def get_risk_db():
+        """Fallback funkce pro risk database"""
+        from main import get_db
+        return get_db()
 
 # Nové Pydantic modely pro risk events
 class RiskEventCreate(BaseModel):
