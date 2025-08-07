@@ -768,7 +768,7 @@ class RiskEventResponse(BaseModel):
     created_at: str
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class SupplierResponse(BaseModel):
     id: int
@@ -780,7 +780,7 @@ class SupplierResponse(BaseModel):
     created_at: str
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class RiskAnalysisResponse(BaseModel):
     event_count: int
