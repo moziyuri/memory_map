@@ -697,4 +697,358 @@ async def add_memory(memory: MemoryCreate):
 # Spuštění aplikace, pokud je tento soubor spuštěn přímo
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# ============================================================================
+# RISK ANALYST FEATURE - Nové modely a endpointy pro VW Group
+# ============================================================================
+
+# Nové Pydantic modely pro risk events
+class RiskEventCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    latitude: float
+    longitude: float
+    event_type: str  # 'flood', 'protest', 'supply_chain', 'geopolitical'
+    severity: str  # 'low', 'medium', 'high', 'critical'
+    source: str  # 'chmi_api', 'rss', 'manual', 'copernicus'
+    url: Optional[str] = None
+
+class RiskEventResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    latitude: float
+    longitude: float
+    event_type: str
+    severity: str
+    source: str
+    url: Optional[str] = None
+    scraped_at: Optional[str] = None
+    created_at: str
+
+    class Config:
+        orm_mode = True
+
+class SupplierResponse(BaseModel):
+    id: int
+    name: str
+    latitude: float
+    longitude: float
+    category: Optional[str] = None
+    risk_level: str
+    created_at: str
+
+    class Config:
+        orm_mode = True
+
+class RiskAnalysisResponse(BaseModel):
+    event_count: int
+    high_risk_count: int
+    risk_score: float
+
+# ============================================================================
+# RISK EVENTS API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/risks", response_model=List[RiskEventResponse])
+async def get_risk_events(
+    event_type: Optional[str] = None,
+    severity: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    radius_km: Optional[int] = 50
+):
+    """Získá risk events s filtry"""
+    conn = None
+    try:
+        conn = next(get_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Základní dotaz
+            query = """
+                SELECT id, title, description, 
+                       ST_X(location::geometry) as longitude, 
+                       ST_Y(location::geometry) as latitude,
+                       event_type, severity, source, url, 
+                       scraped_at, created_at
+                FROM risk_events
+                WHERE 1=1
+            """
+            params = []
+            
+            # Přidání filtrů
+            if event_type:
+                query += " AND event_type = %s"
+                params.append(event_type)
+            
+            if severity:
+                query += " AND severity = %s"
+                params.append(severity)
+            
+            # Geografický filtr
+            if lat is not None and lon is not None:
+                query += """
+                    AND ST_DWithin(
+                        location::geography, 
+                        ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, 
+                        %s * 1000
+                    )
+                """
+                params.extend([lon, lat, radius_km])
+            
+            query += " ORDER BY created_at DESC"
+            
+            cur.execute(query, params)
+            results = cur.fetchall()
+            
+            return [dict(row) for row in results]
+            
+    except Exception as e:
+        print(f"Chyba při získávání risk events: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/risks", response_model=RiskEventResponse, status_code=201)
+async def create_risk_event(risk: RiskEventCreate):
+    """Vytvoří nový risk event"""
+    conn = None
+    try:
+        conn = next(get_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO risk_events (title, description, location, event_type, severity, source, url)
+                VALUES (%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s, %s)
+                RETURNING id, title, description, 
+                          ST_X(location::geometry) as longitude, 
+                          ST_Y(location::geometry) as latitude,
+                          event_type, severity, source, url, 
+                          scraped_at, created_at
+            """, (
+                risk.title,
+                risk.description,
+                risk.longitude,
+                risk.latitude,
+                risk.event_type,
+                risk.severity,
+                risk.source,
+                risk.url
+            ))
+            
+            new_risk = cur.fetchone()
+            conn.commit()
+            
+            return dict(new_risk)
+            
+    except Exception as e:
+        print(f"Chyba při vytváření risk event: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/risks/{risk_id}", response_model=RiskEventResponse)
+async def get_risk_event(risk_id: int):
+    """Získá konkrétní risk event"""
+    conn = None
+    try:
+        conn = next(get_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, title, description, 
+                       ST_X(location::geometry) as longitude, 
+                       ST_Y(location::geometry) as latitude,
+                       event_type, severity, source, url, 
+                       scraped_at, created_at
+                FROM risk_events
+                WHERE id = %s
+            """, (risk_id,))
+            
+            result = cur.fetchone()
+            if not result:
+                raise HTTPException(status_code=404, detail="Risk event not found")
+            
+            return dict(result)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Chyba při získávání risk event: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# SUPPLIERS API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/suppliers", response_model=List[SupplierResponse])
+async def get_suppliers():
+    """Získá všechny dodavatele VW Group"""
+    conn = None
+    try:
+        conn = next(get_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, name, 
+                       ST_X(location::geometry) as longitude, 
+                       ST_Y(location::geometry) as latitude,
+                       category, risk_level, created_at
+                FROM vw_suppliers
+                ORDER BY name
+            """)
+            
+            results = cur.fetchall()
+            return [dict(row) for row in results]
+            
+    except Exception as e:
+        print(f"Chyba při získávání dodavatelů: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# RISK ANALYSIS API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/analysis/risk-map")
+async def get_risk_map():
+    """Vrátí data pro risk mapu - všechny risk events a dodavatele"""
+    conn = None
+    try:
+        conn = next(get_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Získání všech risk events
+            cur.execute("""
+                SELECT id, title, description, 
+                       ST_X(location::geometry) as longitude, 
+                       ST_Y(location::geometry) as latitude,
+                       event_type, severity, source, url, 
+                       created_at
+                FROM risk_events
+                ORDER BY created_at DESC
+            """)
+            risk_events = [dict(row) for row in cur.fetchall()]
+            
+            # Získání všech dodavatelů
+            cur.execute("""
+                SELECT id, name, 
+                       ST_X(location::geometry) as longitude, 
+                       ST_Y(location::geometry) as latitude,
+                       category, risk_level, created_at
+                FROM vw_suppliers
+                ORDER BY name
+            """)
+            suppliers = [dict(row) for row in cur.fetchall()]
+            
+            return {
+                "risk_events": risk_events,
+                "suppliers": suppliers
+            }
+            
+    except Exception as e:
+        print(f"Chyba při získávání risk map data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analysis/supplier-risk", response_model=RiskAnalysisResponse)
+async def analyze_supplier_risk(
+    lat: float,
+    lon: float,
+    radius_km: int = 50
+):
+    """Analýza rizik pro dodavatele v daném okolí"""
+    conn = None
+    try:
+        conn = next(get_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM calculate_risk_in_radius(%s, %s, %s)
+            """, (lat, lon, radius_km))
+            
+            result = cur.fetchone()
+            if result:
+                return {
+                    "event_count": result['event_count'],
+                    "high_risk_count": result['high_risk_count'],
+                    "risk_score": float(result['risk_score'])
+                }
+            else:
+                return {
+                    "event_count": 0,
+                    "high_risk_count": 0,
+                    "risk_score": 0.0
+                }
+            
+    except Exception as e:
+        print(f"Chyba při analýze rizik dodavatele: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analysis/statistics")
+async def get_risk_statistics():
+    """Statistiky rizik"""
+    conn = None
+    try:
+        conn = next(get_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Celkový počet risk events
+            cur.execute("SELECT COUNT(*) as total_events FROM risk_events")
+            total_events = cur.fetchone()['total_events']
+            
+            # Počet podle typu
+            cur.execute("""
+                SELECT event_type, COUNT(*) as count
+                FROM risk_events
+                GROUP BY event_type
+                ORDER BY count DESC
+            """)
+            events_by_type = [dict(row) for row in cur.fetchall()]
+            
+            # Počet podle závažnosti
+            cur.execute("""
+                SELECT severity, COUNT(*) as count
+                FROM risk_events
+                GROUP BY severity
+                ORDER BY count DESC
+            """)
+            events_by_severity = [dict(row) for row in cur.fetchall()]
+            
+            # Počet dodavatelů
+            cur.execute("SELECT COUNT(*) as total_suppliers FROM vw_suppliers")
+            total_suppliers = cur.fetchone()['total_suppliers']
+            
+            return {
+                "total_events": total_events,
+                "total_suppliers": total_suppliers,
+                "events_by_type": events_by_type,
+                "events_by_severity": events_by_severity
+            }
+            
+    except Exception as e:
+        print(f"Chyba při získávání statistik: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# WEB SCRAPING ENDPOINTS (placeholder pro budoucí implementaci)
+# ============================================================================
+
+@app.get("/api/scrape/chmi")
+async def scrape_chmi_floods():
+    """Scrape CHMI API pro záplavové výstrahy - placeholder"""
+    return {
+        "message": "CHMI scraper bude implementován v další fázi",
+        "status": "placeholder"
+    }
+
+@app.get("/api/scrape/rss")
+async def scrape_rss_feeds():
+    """Scrape RSS feeds pro novinky - placeholder"""
+    return {
+        "message": "RSS scraper bude implementován v další fázi",
+        "status": "placeholder"
+    }
+
+@app.get("/api/scrape/run-all")
+async def run_all_scrapers():
+    """Spustí všechny scrapers najednou - placeholder"""
+    return {
+        "message": "Web scraping bude implementován v další fázi",
+        "status": "placeholder"
+    } 
