@@ -710,7 +710,7 @@ def get_risk_db():
     import os
     from typing import Generator
     
-    # Zkusíme environment variable, pak fallback na hardcoded
+    # Zkusíme environment variable, pak fallback
     database_url = os.getenv('RISK_DATABASE_URL')
     
     if database_url:
@@ -721,9 +721,6 @@ def get_risk_db():
         except Exception as e:
             print(f"Chyba při připojení přes DATABASE_URL: {str(e)}")
             raise
-        finally:
-            if 'conn' in locals():
-                conn.close()
     else:
         # Fallback na hardcoded hodnoty
         try:
@@ -739,9 +736,6 @@ def get_risk_db():
         except Exception as e:
             print(f"Chyba při připojení k risk analyst databázi: {str(e)}")
             raise
-        finally:
-            if 'conn' in locals():
-                conn.close()
 
 # Nové Pydantic modely pro risk events
 class RiskEventCreate(BaseModel):
