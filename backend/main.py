@@ -938,12 +938,14 @@ async def get_risk_event(risk_id: int):
 # SUPPLIERS API ENDPOINTS
 # ============================================================================
 
-@app.get("/api/suppliers", response_model=List[SupplierResponse])
+@app.get("/api/suppliers")
 async def get_suppliers():
     """Získá všechny dodavatele VW Group"""
     conn = None
     try:
+        print("🔍 Spouštím get_suppliers...")
         conn = next(get_risk_db())
+        print("✅ Připojení k databázi OK")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -956,10 +958,28 @@ async def get_suppliers():
             """)
             
             results = cur.fetchall()
-            return [dict(row) for row in results]
+            print(f"✅ Found {len(results)} suppliers")
+            
+            # Konverze na response data
+            response_data = []
+            for row in results:
+                row_dict = dict(row)
+                # Zajistíme správné datové typy
+                row_dict['latitude'] = float(row_dict['latitude'])
+                row_dict['longitude'] = float(row_dict['longitude'])
+                row_dict['id'] = int(row_dict['id'])
+                # Konvertujeme datetime na string
+                if row_dict['created_at']:
+                    row_dict['created_at'] = str(row_dict['created_at'])
+                response_data.append(row_dict)
+            
+            print(f"✅ Returning {len(response_data)} suppliers")
+            return response_data
             
     except Exception as e:
-        print(f"Chyba při získávání dodavatelů: {str(e)}")
+        print(f"❌ Chyba při získávání dodavatelů: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
@@ -984,7 +1004,18 @@ async def get_risk_map():
                 FROM risk_events
                 ORDER BY created_at DESC
             """)
-            risk_events = [dict(row) for row in cur.fetchall()]
+            risk_events_raw = cur.fetchall()
+            
+            # Konverze risk events
+            risk_events = []
+            for row in risk_events_raw:
+                row_dict = dict(row)
+                row_dict['latitude'] = float(row_dict['latitude'])
+                row_dict['longitude'] = float(row_dict['longitude'])
+                row_dict['id'] = int(row_dict['id'])
+                if row_dict['created_at']:
+                    row_dict['created_at'] = str(row_dict['created_at'])
+                risk_events.append(row_dict)
             
             # Získání všech dodavatelů
             cur.execute("""
@@ -995,7 +1026,18 @@ async def get_risk_map():
                 FROM vw_suppliers
                 ORDER BY name
             """)
-            suppliers = [dict(row) for row in cur.fetchall()]
+            suppliers_raw = cur.fetchall()
+            
+            # Konverze suppliers
+            suppliers = []
+            for row in suppliers_raw:
+                row_dict = dict(row)
+                row_dict['latitude'] = float(row_dict['latitude'])
+                row_dict['longitude'] = float(row_dict['longitude'])
+                row_dict['id'] = int(row_dict['id'])
+                if row_dict['created_at']:
+                    row_dict['created_at'] = str(row_dict['created_at'])
+                suppliers.append(row_dict)
             
             return {
                 "risk_events": risk_events,
