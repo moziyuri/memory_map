@@ -703,15 +703,10 @@ if __name__ == "__main__":
 # RISK ANALYST FEATURE - Nové modely a endpointy pro VW Group
 # ============================================================================
 
-# Import konfigurace pro risk analyst databázi
-try:
-    from risk_db_config import get_risk_db
-except ImportError:
-    # Fallback pro případ, že risk_db_config není dostupný
-    def get_risk_db():
-        """Fallback funkce pro risk database"""
-        from main import get_db
-        return get_db()
+# Používáme původní databázi pro risk analyst feature
+def get_risk_db():
+    """Používá původní databázi pro risk analyst feature"""
+    return get_db()
 
 # Nové Pydantic modely pro risk events
 class RiskEventCreate(BaseModel):

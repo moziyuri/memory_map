@@ -15,12 +15,12 @@ load_dotenv()
 def init_risk_db():
     """Inicializuje databázi pro risk analyst feature"""
     
-    # NOVÁ DATABÁZE PRO RISK ANALYST FEATURE - SKUTEČNÉ HODNOTY
-    host = "dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com"
+    # Používáme původní databázi (stejnou jako v direct_db_init.py)
+    host = "dpg-cn8bjt7109ks7395a720-a.frankfurt-postgres.render.com"
     port = "5432"
-    dbname = "risk_analyst"
-    user = "risk_analyst_user"
-    password = "uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf"
+    dbname = "memorymap"
+    user = "memorymap_user"
+    password = "DY7iZEJA0Oy1GDBRwIlysGb2CkW0zluJ"
     
     print(f"Připojuji se k databázi: {host}:{port}/{dbname} jako {user}")
     
