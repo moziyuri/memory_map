@@ -703,6 +703,9 @@ if __name__ == "__main__":
 # RISK ANALYST FEATURE - Nové modely a endpointy pro VW Group
 # ============================================================================
 
+# Import konfigurace pro risk analyst databázi
+from risk_db_config import get_risk_db
+
 # Nové Pydantic modely pro risk events
 class RiskEventCreate(BaseModel):
     title: str
@@ -762,7 +765,7 @@ async def get_risk_events(
     """Získá risk events s filtry"""
     conn = None
     try:
-        conn = next(get_db())
+        conn = next(get_risk_db())
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Základní dotaz
@@ -813,7 +816,7 @@ async def create_risk_event(risk: RiskEventCreate):
     """Vytvoří nový risk event"""
     conn = None
     try:
-        conn = next(get_db())
+        conn = next(get_risk_db())
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -849,7 +852,7 @@ async def get_risk_event(risk_id: int):
     """Získá konkrétní risk event"""
     conn = None
     try:
-        conn = next(get_db())
+        conn = next(get_risk_db())
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -883,7 +886,7 @@ async def get_suppliers():
     """Získá všechny dodavatele VW Group"""
     conn = None
     try:
-        conn = next(get_db())
+        conn = next(get_risk_db())
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -911,7 +914,7 @@ async def get_risk_map():
     """Vrátí data pro risk mapu - všechny risk events a dodavatele"""
     conn = None
     try:
-        conn = next(get_db())
+        conn = next(get_risk_db())
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Získání všech risk events
@@ -955,7 +958,7 @@ async def analyze_supplier_risk(
     """Analýza rizik pro dodavatele v daném okolí"""
     conn = None
     try:
-        conn = next(get_db())
+        conn = next(get_risk_db())
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -985,7 +988,7 @@ async def get_risk_statistics():
     """Statistiky rizik"""
     conn = None
     try:
-        conn = next(get_db())
+        conn = next(get_risk_db())
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Celkový počet risk events

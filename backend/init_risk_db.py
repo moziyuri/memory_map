@@ -15,16 +15,14 @@ load_dotenv()
 def init_risk_db():
     """Inicializuje databázi pro risk analyst feature"""
     
-    # NOVÁ DATABÁZE PRO RISK ANALYST FEATURE
-    # TODO: Nahradit skutečnými hodnotami z Render.com
-    host = "dpg-xxxxx-a.frankfurt-postgres.render.com"  # TODO: Skutečný host
+    # NOVÁ DATABÁZE PRO RISK ANALYST FEATURE - SKUTEČNÉ HODNOTY
+    host = "dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com"
     port = "5432"
-    dbname = "memorymap_risk_analyst"  # TODO: Skutečný název databáze
-    user = "memorymap_risk_analyst_user"  # TODO: Skutečný uživatel
-    password = "xxxxx"  # TODO: Skutečné heslo
+    dbname = "risk_analyst"
+    user = "risk_analyst_user"
+    password = "uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf"
     
     print(f"Připojuji se k databázi: {host}:{port}/{dbname} jako {user}")
-    print("⚠️  POZOR: Používám placeholder hodnoty. Nahraď skutečnými hodnotami z Render.com!")
     
     try:
         conn = psycopg2.connect(
@@ -184,7 +182,6 @@ def init_risk_db():
         
     except Exception as e:
         print(f"❌ Chyba při připojení k databázi: {str(e)}")
-        print("💡 Zkontroluj, že jsi vytvořil novou PostgreSQL databázi na Render.com")
         return False
 
 if __name__ == "__main__":
