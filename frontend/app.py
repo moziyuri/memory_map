@@ -117,10 +117,12 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
     ).add_to(m)
     
     # Přidání dodavatelů (modré značky)
+    supplier_group = folium.FeatureGroup(name="🏭 Dodavatelé", show=True)
+    
     for supplier in suppliers:
-        if supplier.get('location') and is_in_czech_republic(supplier['location']['coordinates'][1], supplier['location']['coordinates'][0]):
-            lat = supplier['location']['coordinates'][1]
-            lon = supplier['location']['coordinates'][0]
+        if supplier.get('latitude') and supplier.get('longitude') and is_in_czech_republic(supplier['latitude'], supplier['longitude']):
+            lat = supplier['latitude']
+            lon = supplier['longitude']
             
             # Barva podle úrovně rizika
             risk_colors = {'low': 'green', 'medium': 'orange', 'high': 'red', 'critical': 'darkred'}
@@ -139,27 +141,36 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
                 location=[lat, lon],
                 popup=folium.Popup(popup_content, max_width=300),
                 icon=folium.Icon(color=color, icon='industry', prefix='fa'),
-                tooltip=f"🏭 {supplier['name']}"
-            ).add_to(m)
+                tooltip=f"🏭 {supplier['name']} ({supplier.get('risk_level', 'N/A')})"
+            ).add_to(supplier_group)
+    
+    supplier_group.add_to(m)
     
     # Přidání rizikových událostí (červené značky)
+    event_group = folium.FeatureGroup(name="⚠️ Rizikové události", show=True)
+    
     for event in events:
-        if event.get('location') and is_in_czech_republic(event['location']['coordinates'][1], event['location']['coordinates'][0]):
-            lat = event['location']['coordinates'][1]
-            lon = event['location']['coordinates'][0]
+        if event.get('latitude') and event.get('longitude') and is_in_czech_republic(event['latitude'], event['longitude']):
+            lat = event['latitude']
+            lon = event['longitude']
             
             # Barva podle závažnosti
             severity_colors = {'low': 'lightred', 'medium': 'red', 'high': 'darkred', 'critical': 'black'}
             color = severity_colors.get(event.get('severity', 'medium'), 'red')
+            
+            # Vylepšený popup s odkazem na zdroj
+            source_link = ""
+            if event.get('url'):
+                source_link = f"<p><strong>Zdroj:</strong> <a href='{event['url']}' target='_blank'>Otevřít zdroj</a></p>"
             
             popup_content = f"""
             <div style='width: 250px;'>
                 <h4>⚠️ {event['title']}</h4>
                 <p><strong>Typ:</strong> {event.get('event_type', 'Neznámé')}</p>
                 <p><strong>Závažnost:</strong> {event.get('severity', 'Neznámé')}</p>
-                <p><strong>Zdroj:</strong> {event.get('source', 'Neznámé')}</p>
                 <p><strong>Datum:</strong> {event.get('created_at', 'Neznámé')}</p>
                 <p><strong>Popis:</strong> {event.get('description', 'Bez popisu')}</p>
+                {source_link}
             </div>
             """
             
@@ -168,67 +179,27 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
                 popup=folium.Popup(popup_content, max_width=300),
                 icon=folium.Icon(color=color, icon='exclamation-triangle', prefix='fa'),
                 tooltip=f"⚠️ {event['title'][:30]}..."
-            ).add_to(m)
+            ).add_to(event_group)
     
-    # Přidání výsledků pokročilé analýzy
-    if flood_data and flood_data.get('flood_analysis'):
-        for analysis in flood_data['flood_analysis'][:3]:  # Pouze top 3
-            if analysis.get('supplier_location'):
-                lat = analysis['supplier_location']['lat']
-                lon = analysis['supplier_location']['lon']
-                
-                popup_content = f"""
-                <div style='width: 250px;'>
-                    <h4>🌊 Simulace záplav</h4>
-                    <p><strong>Dodavatel:</strong> {analysis.get('supplier_name', 'Neznámé')}</p>
-                    <p><strong>Pravděpodobnost:</strong> {analysis.get('flood_probability', 0):.1%}</p>
-                    <p><strong>Nejbližší řeka:</strong> {analysis.get('nearest_river_name', 'Neznámá')}</p>
-                    <p><strong>Vzdálenost:</strong> {analysis.get('river_distance_km', 0):.1f} km</p>
-                    <p><strong>Úroveň rizika:</strong> {analysis.get('impact_level', 'Neznámé')}</p>
-                </div>
-                """
-                
-                folium.Marker(
-                    location=[lat, lon],
-                    popup=folium.Popup(popup_content, max_width=300),
-                    icon=folium.Icon(color='red', icon='tint', prefix='fa'),
-                    tooltip=f"🌊 {analysis.get('supplier_name', 'Simulace záplav')}"
-                ).add_to(m)
+    event_group.add_to(m)
     
-    if geo_data and geo_data.get('combined_risk_assessment'):
-        for analysis in geo_data['combined_risk_assessment'][:3]:  # Pouze top 3
-            if analysis.get('location'):
-                lat = analysis['location']['lat']
-                lon = analysis['location']['lon']
-                
-                # Barva podle risk score
-                risk_score = analysis.get('risk_score', 0)
-                if risk_score > 70:
-                    color = 'darkred'
-                elif risk_score > 40:
-                    color = 'red'
-                elif risk_score > 20:
-                    color = 'orange'
-                else:
-                    color = 'green'
-                
-                popup_content = f"""
-                <div style='width: 250px;'>
-                    <h4>🗺️ Geografická analýza</h4>
-                    <p><strong>Risk Score:</strong> {risk_score:.1f}%</p>
-                    <p><strong>Vzdálenost od řeky:</strong> {analysis.get('river_distance_km', 0):.1f} km</p>
-                    <p><strong>Nadmořská výška:</strong> {analysis.get('elevation_m', 0):.0f} m</p>
-                    <p><strong>Historické události:</strong> {analysis.get('historical_events', 0)}</p>
-                    <p><strong>Doporučení:</strong> {analysis.get('recommendation', 'Neznámé')}</p>
-                </div>
-                """
-                
-                folium.Marker(
-                    location=[lat, lon],
-                    popup=folium.Popup(popup_content, max_width=300),
-                    icon=folium.Icon(color=color, icon='map-marker', prefix='fa'),
-                    tooltip=f"🗺️ Risk Score: {risk_score:.1f}%"
-                ).add_to(m)
+    # Přidání legendy
+    legend_html = '''
+    <div style="position: fixed; 
+                bottom: 50px; left: 50px; width: 200px; height: 120px; 
+                background-color: white; border:2px solid grey; z-index:9999; 
+                font-size:14px; padding: 10px">
+    <p><strong>🗺️ Legenda</strong></p>
+    <p>🏭 <b>Dodavatelé:</b></p>
+    <p>&nbsp;&nbsp;🟢 Nízké riziko</p>
+    <p>&nbsp;&nbsp;🟠 Střední riziko</p>
+    <p>&nbsp;&nbsp;🔴 Vysoké riziko</p>
+    <p>&nbsp;&nbsp;⚫ Kritické riziko</p>
+    <p>⚠️ <b>Události:</b></p>
+    <p>&nbsp;&nbsp;🔴 Červené značky</p>
+    </div>
+    '''
+    m.get_root().html.add_child(folium.Element(legend_html))
     
     # Přidání ovládání vrstev
     folium.LayerControl().add_to(m)
@@ -237,11 +208,11 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
 
 def get_consistent_statistics(events, suppliers):
     """Získání konzistentních statistik pouze pro data v ČR"""
-    czech_events = [e for e in events if e.get('location') and 
-                    is_in_czech_republic(e['location']['coordinates'][1], e['location']['coordinates'][0])]
+    czech_events = [e for e in events if e.get('latitude') and e.get('longitude') and 
+                    is_in_czech_republic(e['latitude'], e['longitude'])]
     
-    czech_suppliers = [s for s in suppliers if s.get('location') and 
-                       is_in_czech_republic(s['location']['coordinates'][1], s['location']['coordinates'][0])]
+    czech_suppliers = [s for s in suppliers if s.get('latitude') and s.get('longitude') and 
+                       is_in_czech_republic(s['latitude'], s['longitude'])]
     
     return {
         'total_events': len(czech_events),
@@ -280,10 +251,6 @@ def main():
     severity_levels = ["Všechny", "low", "medium", "high", "critical"]
     selected_severity = st.sidebar.selectbox("⚠️ Závažnost:", severity_levels)
     
-    # Časové období
-    time_periods = ["Všechny", "Dnes", "Poslední týden", "Poslední měsíc"]
-    selected_period = st.sidebar.selectbox("📅 Časové období:", time_periods)
-    
     # Načtení dat
     events = get_risk_events()
     suppliers = get_suppliers()
@@ -297,11 +264,11 @@ def main():
         filtered_events = [e for e in filtered_events if e.get('severity') == selected_severity]
     
     # Filtrování pouze pro ČR
-    czech_events = [e for e in filtered_events if e.get('location') and 
-                    is_in_czech_republic(e['location']['coordinates'][1], e['location']['coordinates'][0])]
+    czech_events = [e for e in filtered_events if e.get('latitude') and e.get('longitude') and 
+                    is_in_czech_republic(e['latitude'], e['longitude'])]
     
-    czech_suppliers = [s for s in suppliers if s.get('location') and 
-                       is_in_czech_republic(s['location']['coordinates'][1], s['location']['coordinates'][0])]
+    czech_suppliers = [s for s in suppliers if s.get('latitude') and s.get('longitude') and 
+                       is_in_czech_republic(s['latitude'], s['longitude'])]
     
     # Tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["🗺️ Mapa rizik", "📰 Scraping", "🏭 Dodavatelé", "🔬 Pokročilá analýza", "ℹ️ O aplikaci"])
@@ -322,6 +289,7 @@ def main():
             st.metric("⚠️ Vysoké riziko", f"{stats['high_risk_suppliers']} ({stats['high_risk_percentage']:.1f}%)")
         with col4:
             st.metric("🌍 Celkem bodů na mapě", len(czech_events) + len(czech_suppliers))
+            st.info(f"📊 Zobrazeno: {len(czech_events)} událostí + {len(czech_suppliers)} dodavatelů")
         
         # Mapa
         if czech_events or czech_suppliers:
@@ -346,21 +314,51 @@ def main():
         # Tlačítko pro spuštění scrapingu
         if st.button("🔄 Spustit scraping", type="primary"):
             try:
-                response = requests.post(f"{BACKEND_URL}/api/scrape", timeout=30)
+                with st.spinner("🔍 Probíhá scraping..."):
+                    response = requests.get(f"{BACKEND_URL}/api/scrape/run-all", timeout=60)
+                    
                 if response.status_code == 200:
                     result = response.json()
                     st.success("✅ Scraping dokončen!")
                     
-                    # Zobrazení výsledků
-                    if 'chmi_events' in result:
-                        st.info(f"🌤️ CHMI (počasí): {len(result['chmi_events'])} nových událostí")
+                    # Zobrazení výsledků s lepším error handlingem
+                    if 'results' in result:
+                        results = result['results']
+                        
+                        # CHMI výsledky
+                        if 'chmi' in results and results['chmi']:
+                            chmi_result = results['chmi']
+                            if chmi_result.get('status') == 'success':
+                                st.info(f"🌤️ CHMI (počasí): {chmi_result.get('saved_count', 0)} nových událostí")
+                            else:
+                                st.warning(f"⚠️ CHMI: {chmi_result.get('error', 'Neznámá chyba')}")
+                        
+                        # RSS výsledky
+                        if 'rss' in results and results['rss']:
+                            rss_result = results['rss']
+                            if rss_result.get('status') == 'success':
+                                st.info(f"📰 RSS (média): {rss_result.get('saved_count', 0)} nových událostí")
+                            else:
+                                st.warning(f"⚠️ RSS: {rss_result.get('error', 'Neznámá chyba')}")
+                        
+                        # Testovací data
+                        if 'test_data_created' in results and results['test_data_created'] > 0:
+                            st.info(f"📝 Vytvořena testovací data: {results['test_data_created']} událostí")
+                        
+                        # Celkový součet
+                        total_saved = results.get('total_events_saved', 0)
+                        if total_saved > 0:
+                            st.success(f"✅ Celkem uloženo: {total_saved} událostí")
+                        else:
+                            st.warning("⚠️ Nebyly nalezeny žádné nové události")
                     
-                    if 'rss_events' in result:
-                        st.info(f"📰 RSS (média): {len(result['rss_events'])} nových událostí")
-                    
-                    st.rerun()
+                    # Tlačítko pro obnovení zobrazení
+                    if st.button("🔄 Obnovit zobrazení"):
+                        st.rerun()
+                        
                 else:
                     st.error(f"❌ Chyba při scrapingu: {response.status_code}")
+                    st.error(f"Odpověď: {response.text[:200]}")
             except Exception as e:
                 st.error(f"❌ Chyba: {str(e)}")
         
@@ -437,82 +435,47 @@ def main():
         
         # Simulace záplav
         st.subheader("🌊 Simulace záplav")
-        st.markdown("""
-        <div style='background-color: #FFF3E0; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
-            <h4 style='color: #F57C00; margin-top: 0;'>💡 Jak funguje simulace záplav</h4>
-            <p style='margin: 5px 0; font-size: 0.9em;'>
-                <strong>🎯 Cíl:</strong> Simulace dopadů povodní na konkrétní dodavatele<br>
-                <strong>📊 Metodika:</strong> Analýza vzdálenosti od polygonů řek + nadmořská výška<br>
-                <strong>⚠️ Výstup:</strong> Pravděpodobnost záplav pro každého dodavatele<br>
-                <strong>💡 Praktický význam:</strong> Identifikace dodavatelů ohrožených povodněmi<br>
-                <strong>🗺️ Vizualizace:</strong> Výsledky se zobrazí na mapě s červenými značkami (🌊)
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
         
         if flood_data and flood_data.get('flood_analysis'):
             # Zobrazení top 3 výsledků
             st.markdown("**📊 Top 3 nejohroženější dodavatelé:**")
             
             for i, analysis in enumerate(flood_data['flood_analysis'][:3], 1):
-                with st.expander(f"#{i} {analysis.get('supplier_name', 'Neznámý dodavatel')}"):
+                # Opravené získání názvu dodavatele
+                supplier_info = analysis.get('supplier', {})
+                supplier_name = supplier_info.get('name', 'Neznámý dodavatel') if supplier_info else 'Neznámý dodavatel'
+                
+                with st.expander(f"#{i} {supplier_name}"):
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.metric("Pravděpodobnost záplav", f"{analysis.get('flood_probability', 0):.1%}")
-                        st.metric("Nejbližší řeka", analysis.get('nearest_river_name', 'Neznámá'))
+                        # Opravené získání dat o záplavách
+                        flood_risk = analysis.get('flood_risk', {})
+                        probability = flood_risk.get('probability', 0)
+                        nearest_river = flood_risk.get('nearest_river_name', 'Neznámá')
+                        river_distance = flood_risk.get('river_distance_km', 0)
+                        impact_level = flood_risk.get('impact_level', 'Neznámé')
+                        
+                        st.metric("Pravděpodobnost záplav", f"{probability:.1%}")
+                        st.metric("Nejbližší řeka", nearest_river)
                     with col2:
-                        st.metric("Vzdálenost od řeky", f"{analysis.get('river_distance_km', 0):.1f} km")
-                        st.metric("Úroveň rizika", analysis.get('impact_level', 'Neznámé'))
+                        st.metric("Vzdálenost od řeky", f"{river_distance:.1f} km")
+                        st.metric("Úroveň rizika", impact_level)
         else:
             st.warning("⚠️ Data pro simulaci záplav nejsou dostupná.")
         
         # Geografická analýza
         st.subheader("🗺️ Geografická analýza")
-        st.markdown("""
-        <div style='background-color: #E8F5E8; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
-            <h4 style='color: #4CAF50; margin-top: 0;'>💡 Jak funguje geografická analýza</h4>
-            <p style='margin: 5px 0; font-size: 0.9em;'>
-                <strong>🎯 Cíl:</strong> Komplexní posouzení rizik pro libovolnou lokaci<br>
-                <strong>📊 Metodika:</strong> Kombinace analýzy řek + terénu + historických událostí<br>
-                <strong>⚠️ Výstup:</strong> Celkový risk score a doporučení pro lokaci<br>
-                <strong>💡 Praktický význam:</strong> Výběr bezpečných lokalit pro nové dodavatele<br>
-                <strong>🗺️ Vizualizace:</strong> Výsledky se zobrazí na mapě s barevným kódováním (🗺️)
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Přidání srovnání nástrojů
-        st.markdown("""
-        <div style='background-color: #FFF8E1; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
-            <h4 style='color: #F57C00; margin-top: 0;'>📊 Srovnání analytických nástrojů</h4>
-            <div style='display: flex; justify-content: space-between; margin: 10px 0;'>
-                <div style='flex: 1; margin-right: 20px;'>
-                    <strong>🌊 Simulace záplav:</strong><br>
-                    • Zaměřeno na dodavatele<br>
-                    • Analýza polygonů řek<br>
-                    • Výstup: pravděpodobnost záplav<br>
-                    • Praktické využití: identifikace ohrožených dodavatelů
-                </div>
-                <div style='flex: 1;'>
-                    <strong>🗺️ Geografická analýza:</strong><br>
-                    • Zaměřeno na lokace<br>
-                    • Kombinace více faktorů<br>
-                    • Výstup: celkový risk score<br>
-                    • Praktické využití: výběr bezpečných lokalit
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
         
         if geo_data and geo_data.get('combined_risk_assessment'):
             # Zobrazení top 3 výsledků
             st.markdown("**📊 Top 3 nejrizikovější lokace:**")
             
             for i, analysis in enumerate(geo_data['combined_risk_assessment'][:3], 1):
-                with st.expander(f"#{i} Risk Score: {analysis.get('risk_score', 0):.1f}%"):
+                risk_score = analysis.get('risk_score', 0)
+                with st.expander(f"#{i} Risk Score: {risk_score:.1f}%"):
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.metric("Risk Score", f"{analysis.get('risk_score', 0):.1f}%")
+                        st.metric("Risk Score", f"{risk_score:.1f}%")
                         st.metric("Vzdálenost od řeky", f"{analysis.get('river_distance_km', 0):.1f} km")
                     with col2:
                         st.metric("Nadmořská výška", f"{analysis.get('elevation_m', 0):.0f} m")
@@ -569,5 +532,4 @@ def main():
         st.markdown("© 2025 Risk Analyst Dashboard")
 
 if __name__ == "__main__":
-    main()
-    
+    main() 

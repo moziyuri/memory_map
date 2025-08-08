@@ -117,6 +117,7 @@ risk-analyst-dashboard/
 
 ### Reálná data
 - **CHMI API** - Meteorologická data a varování (počasí, povodně)
+- **OpenMeteo API** - Spolehlivé meteorologické data jako fallback
 - **RSS feeds** - Zprávy z českých médií (Novinky.cz, Seznam Zprávy, HN.cz, iRozhlas)
 
 ### Demo data

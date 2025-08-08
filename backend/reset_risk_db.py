@@ -21,12 +21,14 @@ def reset_risk_db():
     database_url = os.getenv('RISK_DATABASE_URL')
     if not database_url:
         print("❌ Chyba: RISK_DATABASE_URL není nastavena")
-        return False
+        print("💡 Pro lokální testování můžete použít hardcoded hodnoty")
+        # Fallback pro lokální testování
+        database_url = "postgresql://risk_analyst_user:uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf@dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com/risk_analyst"
     
     conn = None
     try:
         print("🔗 Připojuji k databázi...")
-        conn = psycopg2.connect(database_url)
+        conn = psycopg2.connect(database_url, sslmode='require')
         cur = conn.cursor()
         
         print("🗑️ Mažu existující data...")
@@ -81,10 +83,13 @@ def reset_risk_db():
         ]
 
         for river in rivers_data:
-            cur.execute("""
-                INSERT INTO rivers (name, geometry, river_type, flow_direction)
-                VALUES (%s, ST_GeomFromText(%s, 4326), %s, %s)
-            """, (river['name'], river['geometry'], river['river_type'], river['flow_direction']))
+            try:
+                cur.execute("""
+                    INSERT INTO rivers (name, geometry, river_type, flow_direction)
+                    VALUES (%s, ST_GeomFromText(%s, 4326), %s, %s)
+                """, (river['name'], river['geometry'], river['river_type'], river['flow_direction']))
+            except Exception as e:
+                print(f"⚠️ Chyba při vkládání řeky {river['name']}: {e}")
 
         print("✅ Řeky vloženy")
         
@@ -98,41 +103,31 @@ def reset_risk_db():
             ("ZF Steering Hradec", 50.2092, 15.8327, "steering", "high"),  # Hradec Králové - blízko Labe
             ("Brembo Brakes Plzeň", 49.7475, 13.3776, "brakes", "high"),  # Plzeň - blízko Berounky
             ("Magna Body Parts Karlovy Vary", 50.231, 12.880, "body_parts", "medium"),  # Karlovy Vary - blízko Ohře
-            
-            # Dodavatelé v bezpečnějších oblastech (dále od řek)
-            ("Siemens Electronics Liberec", 50.7663, 15.0543, "electronics", "medium"),  # Liberec
-            ("Michelin Tires Olomouc", 49.5938, 17.2507, "tires", "medium"),  # Olomouc
-            ("TRW Steering České Budějovice", 48.9745, 14.4747, "steering", "low"),  # České Budějovice
-            ("ATE Brakes Pardubice", 50.0343, 15.7812, "brakes", "low"),  # Pardubice
-            ("Lear Body Parts Zlín", 49.2264, 17.6683, "body_parts", "low")  # Zlín
+            # Další dodavatelé
+            ("Valeo Lighting Ostrava", 49.8175, 18.2625, "lighting", "medium"),  # Ostrava
+            ("Delphi Electronics Liberec", 50.7663, 15.0543, "electronics", "low"),  # Liberec
+            ("Mahle Filtration Olomouc", 49.5938, 17.2507, "filters", "low"),  # Olomouc
+            ("Continental Safety České Budějovice", 48.9745, 14.4747, "safety", "medium"),  # České Budějovice
+            ("ZF Transmission Pardubice", 50.0343, 15.7812, "transmission", "low")  # Pardubice
         ]
-        
+
         for supplier in sample_suppliers:
-            cur.execute("""
-                INSERT INTO vw_suppliers (name, location, category, risk_level)
-                VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
-            """, supplier)
-        
+            try:
+                cur.execute("""
+                    INSERT INTO vw_suppliers (name, location, category, risk_level)
+                    VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
+                    ON CONFLICT (name) DO UPDATE SET
+                        location = EXCLUDED.location,
+                        category = EXCLUDED.category,
+                        risk_level = EXCLUDED.risk_level,
+                        created_at = NOW()
+                """, (supplier[0], supplier[2], supplier[1], supplier[3], supplier[4]))
+            except Exception as e:
+                print(f"⚠️ Chyba při vkládání dodavatele {supplier[0]}: {e}")
+
         print("✅ Dodavatelé vloženi")
         
-        # Vložení několika ukázkových rizikových událostí pro testování
-        print("⚠️ Vkládám ukázkové rizikové události...")
-        
-        sample_events = [
-            ("Záplavy v Praze", "flood", "critical", 50.0755, 14.4378, "Vysoké srážky způsobily záplavy v centru Prahy"),
-            ("Dopravní nehoda na D1", "traffic", "high", 49.1951, 16.6068, "Hromadná nehoda na dálnici D1 u Brna"),
-            ("Výpadek elektřiny v Hradci", "infrastructure", "medium", 50.2092, 15.8327, "Plánovaná údržba elektrické sítě"),
-            ("Protesty v Plzni", "social", "low", 49.7475, 13.3776, "Demonstrace proti zvýšení cen")
-        ]
-        
-        for event in sample_events:
-            cur.execute("""
-                INSERT INTO risk_events (title, event_type, severity, location, description, created_at)
-                VALUES (%s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, NOW())
-            """, event)
-        
-        print("✅ Ukázkové události vloženy")
-        
+        # Commit transakce
         conn.commit()
         print("✅ Databáze úspěšně resetována a inicializována")
         return True

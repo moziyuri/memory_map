@@ -98,6 +98,8 @@ CREATE TABLE vw_suppliers (
 | GET    | /api/scrape/chmi           | Spuštění web scraping z CHMI API          |
 | GET    | /api/scrape/rss            | Spuštění web scraping z RSS feeds         |
 | GET    | /api/scrape/run-all        | Spuštění všech web scrapers               |
+| GET    | /api/test-chmi             | Test CHMI API endpointů                   |
+| GET    | /api/test-openmeteo        | Test OpenMeteo API                        |
 | GET    | /docs                      | API dokumentace (Swagger)                 |
 
 ## Zdroje dat
@@ -106,10 +108,19 @@ CREATE TABLE vw_suppliers (
 
 #### CHMI API
 - **Endpointy**: 
-  - `https://hydro.chmi.cz/hpps/hpps_act.php`
-  - `https://hydro.chmi.cz/hpps/hpps_act_quick.php`
+  - `https://hydro.chmi.cz/hpps/` (funkční)
+  - `https://hydro.chmi.cz/hpps/index.php` (funkční)
+  - `https://hydro.chmi.cz/hpps/hpps_act.php` (nefunkční)
+  - `https://hydro.chmi.cz/hpps/hpps_act_quick.php` (nefunkční)
 - **Typ dat**: Meteorologická varování, povodňové informace
 - **Frekvence**: Při volání `/api/scrape/chmi`
+- **Fallback**: OpenMeteo API při neúspěchu CHMI
+
+#### OpenMeteo API
+- **Endpoint**: `https://api.open-meteo.com/v1/forecast`
+- **Typ dat**: Meteorologická data (teplota, vítr, srážky)
+- **Výhody**: Bezplatné, bez API key, spolehlivé
+- **Frekvence**: Při volání `/api/scrape/chmi` jako fallback
 
 #### RSS Feeds
 - **Zdroje**:

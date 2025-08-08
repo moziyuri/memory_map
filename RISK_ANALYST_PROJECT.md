@@ -114,13 +114,13 @@ $$ LANGUAGE plpgsql;
 - **Použití:** Analýza nadmořské výšky pro flood simulation
 
 ### **2. River Network Data**
-- **Zdroj:** OpenStreetMap, CHMI
+- **Zdroj:** OpenStreetMap, CHMI, OpenMeteo API
 - **Data:** Hlavní řeky ČR s průtoky
 - **Formát:** GeoJSON, Shapefile
 - **Použití:** Výpočet vzdálenosti od řek
 
 ### **3. Historical Event Database**
-- **Zdroj:** CHMI, historické záznamy
+- **Zdroj:** CHMI, OpenMeteo API, historické záznamy
 - **Data:** Minulé záplavy, události
 - **Formát:** CSV, JSON
 - **Použití:** Korelace s minulými událostmi
@@ -239,6 +239,7 @@ $$ LANGUAGE plpgsql;
 
 ### **Data Sources:**
 - CHMI API - Meteorologická data
+- OpenMeteo API - Spolehlivé meteorologické data
 - RSS Feeds - Novinky a události
 - OpenStreetMap - Geografická data
 - SRTM/ALOS - Elevation data
