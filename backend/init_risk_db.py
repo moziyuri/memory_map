@@ -61,37 +61,44 @@ def init_risk_db():
         print("🏗️ Vytvářím tabulky...")
         
         # Tabulka risk_events
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS risk_events (
-                id SERIAL PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                description TEXT,
-                location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
-                event_type VARCHAR(50), -- 'flood', 'protest', 'supply_chain', 'geopolitical'
-                severity VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
-                source VARCHAR(100), -- 'chmi_api', 'rss', 'manual', 'copernicus'
-                url TEXT, -- Zdroj dat
-                scraped_at TIMESTAMP DEFAULT NOW(),
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-        """)
-        print("✅ Tabulka risk_events vytvořena/zkontrolována")
+        try:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS risk_events (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
+                    event_type VARCHAR(50), -- 'flood', 'protest', 'supply_chain', 'geopolitical'
+                    severity VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
+                    source VARCHAR(100), -- 'chmi_api', 'rss', 'manual', 'copernicus'
+                    url TEXT, -- Zdroj dat
+                    scraped_at TIMESTAMP DEFAULT NOW(),
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            print("✅ Tabulka risk_events vytvořena/zkontrolována")
+        except Exception as e:
+            print(f"⚠️ Chyba při vytváření risk_events: {str(e)}")
         
         # Tabulka vw_suppliers
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS vw_suppliers (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL UNIQUE,
-                location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
-                category VARCHAR(100), -- 'electronics', 'tires', 'steering', 'brakes'
-                risk_level VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-        """)
-        print("✅ Tabulka vw_suppliers vytvořena/zkontrolována")
+        try:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS vw_suppliers (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL UNIQUE,
+                    location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
+                    category VARCHAR(100), -- 'electronics', 'tires', 'steering', 'brakes'
+                    risk_level VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            print("✅ Tabulka vw_suppliers vytvořena/zkontrolována")
+        except Exception as e:
+            print(f"⚠️ Chyba při vytváření vw_suppliers: {str(e)}")
         
         # Přidání tabulky pro řeky (polygony)
-        cur.execute("""
+        try:
+            cur.execute("""
 CREATE TABLE IF NOT EXISTS rivers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
@@ -101,12 +108,17 @@ CREATE TABLE IF NOT EXISTS rivers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """)
+        except Exception as e:
+            print(f"⚠️ Chyba při vytváření rivers: {str(e)}")
 
         # Vytvoření indexu pro prostorové vyhledávání
-        cur.execute("""
+        try:
+            cur.execute("""
 CREATE INDEX IF NOT EXISTS idx_rivers_geometry 
 ON rivers USING GIST (geometry);
 """)
+        except Exception as e:
+            print(f"⚠️ Chyba při vytváření rivers indexu: {str(e)}")
 
         # Vložení základních řek ČR jako polygony (simulované, ale reálné struktury)
         rivers_data = [
@@ -143,14 +155,18 @@ ON rivers USING GIST (geometry);
         ]
 
         for river in rivers_data:
-            cur.execute("""
-                INSERT INTO rivers (name, geometry, river_type, flow_direction)
-                VALUES (%s, ST_GeomFromText(%s, 4326), %s, %s)
-                ON CONFLICT (name) DO NOTHING
-            """, (river['name'], river['geometry'], river['river_type'], river['flow_direction']))
+            try:
+                cur.execute("""
+                    INSERT INTO rivers (name, geometry, river_type, flow_direction)
+                    VALUES (%s, ST_GeomFromText(%s, 4326), %s, %s)
+                    ON CONFLICT (name) DO NOTHING
+                """, (river['name'], river['geometry'], river['river_type'], river['flow_direction']))
+            except Exception as e:
+                print(f"⚠️ Chyba při vkládání řeky {river['name']}: {str(e)}")
 
         # Funkce pro výpočet vzdálenosti od řeky pomocí polygonů
-        cur.execute("""
+        try:
+            cur.execute("""
 CREATE OR REPLACE FUNCTION calculate_river_distance(lat DOUBLE PRECISION, lon DOUBLE PRECISION)
 RETURNS DOUBLE PRECISION AS $$
 DECLARE
@@ -175,9 +191,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 """)
+        except Exception as e:
+            print(f"⚠️ Chyba při vytváření calculate_river_distance: {str(e)}")
 
         # Funkce pro analýzu rizika záplav na základě polygonů řek
-        cur.execute("""
+        try:
+            cur.execute("""
 CREATE OR REPLACE FUNCTION analyze_flood_risk_from_rivers(lat DOUBLE PRECISION, lon DOUBLE PRECISION)
 RETURNS JSON AS $$
 DECLARE
@@ -227,6 +246,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 """)
+        except Exception as e:
+            print(f"⚠️ Chyba při vytváření analyze_flood_risk_from_rivers: {str(e)}")
         
         # 3. Vytvoření geografických indexů
         print("🗺️ Vytvářím geografické indexy...")
@@ -239,36 +260,39 @@ $$ LANGUAGE plpgsql;
         
         # 4. Vytvoření funkce pro výpočet rizik
         print("🧮 Vytvářím funkci pro výpočet rizik...")
-        cur.execute("""
-            CREATE OR REPLACE FUNCTION calculate_risk_in_radius(
-                lat DOUBLE PRECISION,
-                lon DOUBLE PRECISION,
-                radius_km INTEGER
-            ) RETURNS TABLE (
-                event_count INTEGER,
-                high_risk_count INTEGER,
-                risk_score NUMERIC
-            ) AS $$
-            BEGIN
-                RETURN QUERY
-                SELECT 
-                    COUNT(*)::INTEGER as event_count,
-                    COUNT(CASE WHEN severity IN ('high', 'critical') THEN 1 END)::INTEGER as high_risk_count,
-                    CASE 
-                        WHEN COUNT(*) > 0 THEN 
-                            (COUNT(CASE WHEN severity IN ('high', 'critical') THEN 1 END)::NUMERIC / COUNT(*)::NUMERIC * 100)
-                        ELSE 0 
-                    END as risk_score
-                FROM risk_events
-                WHERE ST_DWithin(
-                    location::geography,
-                    ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
-                    radius_km * 1000
-                );
-            END;
-            $$ LANGUAGE plpgsql;
-        """)
-        print("✅ Funkce calculate_risk_in_radius vytvořena")
+        try:
+            cur.execute("""
+                CREATE OR REPLACE FUNCTION calculate_risk_in_radius(
+                    lat DOUBLE PRECISION,
+                    lon DOUBLE PRECISION,
+                    radius_km INTEGER
+                ) RETURNS TABLE (
+                    event_count INTEGER,
+                    high_risk_count INTEGER,
+                    risk_score NUMERIC
+                ) AS $$
+                BEGIN
+                    RETURN QUERY
+                    SELECT 
+                        COUNT(*)::INTEGER as event_count,
+                        COUNT(CASE WHEN severity IN ('high', 'critical') THEN 1 END)::INTEGER as high_risk_count,
+                        CASE 
+                            WHEN COUNT(*) > 0 THEN 
+                                (COUNT(CASE WHEN severity IN ('high', 'critical') THEN 1 END)::NUMERIC / COUNT(*)::NUMERIC * 100)
+                            ELSE 0 
+                        END as risk_score
+                    FROM risk_events
+                    WHERE ST_DWithin(
+                        location::geography,
+                        ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+                        radius_km * 1000
+                    );
+                END;
+                $$ LANGUAGE plpgsql;
+            """)
+            print("✅ Funkce calculate_risk_in_radius vytvořena")
+        except Exception as e:
+            print(f"⚠️ Chyba při vytváření calculate_risk_in_radius: {str(e)}")
         
         # 5. Databáze je připravena pro reálná data
         print("📝 Databáze je připravena pro reálná data z web scrapingu...")
@@ -292,41 +316,67 @@ $$ LANGUAGE plpgsql;
             ("Lear Body Parts Zlín", 49.2264, 17.6683, "body_parts", "low")  # Zlín
         ]
         
-        # Nejdříve přidáme UNIQUE constraint pokud neexistuje
-        try:
-            cur.execute("ALTER TABLE vw_suppliers ADD CONSTRAINT vw_suppliers_name_unique UNIQUE (name);")
-            print("✅ UNIQUE constraint přidán na name sloupec")
-        except Exception as e:
-            print(f"ℹ️ UNIQUE constraint již existuje nebo nelze přidat: {str(e)}")
+        # Vylepšená logika pro přidání dodavatelů s lepším error handlingem
+        suppliers_added = 0
+        suppliers_skipped = 0
         
         for supplier in sample_suppliers:
             try:
+                # Zkusíme vložit dodavatele s ON CONFLICT DO NOTHING
                 cur.execute("""
                     INSERT INTO vw_suppliers (name, location, category, risk_level)
                     VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
                     ON CONFLICT (name) DO NOTHING
                 """, supplier)
+                
+                # Zkontrolujeme, zda byl řádek skutečně vložen
+                if cur.rowcount > 0:
+                    suppliers_added += 1
+                else:
+                    suppliers_skipped += 1
+                    
             except Exception as e:
                 print(f"⚠️ Chyba při vkládání dodavatele {supplier[0]}: {str(e)}")
+                suppliers_skipped += 1
+                # Pokračujeme s dalšími dodavateli místo přerušení transakce
+                continue
         
-        print(f"✅ Přidáno {len(sample_suppliers)} ukázkových dodavatelů")
+        print(f"✅ Přidáno {suppliers_added} nových dodavatelů, {suppliers_skipped} přeskočeno (již existují)")
         
         # 7. Potvrzení, že demo data již nejsou vkládána
         print("📝 Demo data pro risk events již nejsou vkládána - pouze reálná data z web scrapingu")
         print("📝 Demo data pro suppliers jsou vkládána pouze pro testování pokročilých funkcí")
         
-        conn.commit()
-        print("✅ Databáze úspěšně inicializována pro Risk Analyst Dashboard")
-        return True
+        # Pokusíme se commitnout transakci
+        try:
+            conn.commit()
+            print("✅ Databáze úspěšně inicializována pro Risk Analyst Dashboard")
+            return True
+        except Exception as e:
+            print(f"❌ Chyba při commitování transakce: {str(e)}")
+            try:
+                conn.rollback()
+                print("🔄 Transakce byla rollbackována")
+            except Exception as rollback_error:
+                print(f"⚠️ Chyba při rollbacku: {str(rollback_error)}")
+            return False
         
     except Exception as e:
         print(f"❌ Chyba při inicializaci databáze: {str(e)}")
-        if conn:
-            conn.rollback()
+        try:
+            if conn:
+                conn.rollback()
+                print("🔄 Transakce byla rollbackována kvůli chybě")
+        except Exception as rollback_error:
+            print(f"⚠️ Chyba při rollbacku: {str(rollback_error)}")
         return False
     finally:
-        if conn:
-            conn.close()
+        try:
+            if conn:
+                conn.close()
+                print("🔌 Připojení k databázi uzavřeno")
+        except Exception as close_error:
+            print(f"⚠️ Chyba při uzavírání připojení: {str(close_error)}")
 
 if __name__ == "__main__":
     print("=" * 50)

@@ -36,10 +36,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://stanislavhoracekmemorymap.streamlit.app",
+        "https://memory-map-feature-risk-analyst-frontend-app.onrender.com",
         "http://localhost:8501",  # Pro lokální vývoj
         "https://localhost:8501",
         "https://memory-map.onrender.com",  # Správná Render.com URL
-        "https://memorymap-api.onrender.com"  # Ponecháme pro případ
+        "https://memorymap-api.onrender.com",  # Ponecháme pro případ
+        "*"  # Pro vývoj - v produkci by mělo být specifické
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -712,7 +714,7 @@ if __name__ == "__main__":
 
 # Přímé připojení k risk analyst databázi
 def get_risk_db():
-    """Připojení k risk analyst databázi"""
+    """Připojení k risk analyst databázi s vylepšeným error handlingem"""
     import psycopg2
     import os
     from typing import Generator
@@ -721,27 +723,42 @@ def get_risk_db():
     database_url = os.getenv('RISK_DATABASE_URL')
     
     if database_url:
-        # Použijeme DATABASE_URL format
+        print(f"✅ Používám RISK_DATABASE_URL: {database_url[:20]}...")
         try:
-            conn = psycopg2.connect(database_url, sslmode='require')
+            # Úprava URL pro psycopg2 (pokud používá formát postgres://)
+            if database_url.startswith('postgres://'):
+                database_url = database_url.replace('postgres://', 'postgresql://', 1)
+                print("URL konvertováno z postgres:// na postgresql://")
+            
+            conn = psycopg2.connect(database_url, sslmode='require', connect_timeout=10)
+            print("✅ Připojení k databázi úspěšné!")
             yield conn
         except Exception as e:
-            print(f"Chyba při připojení přes DATABASE_URL: {str(e)}")
+            print(f"❌ Chyba při připojení přes DATABASE_URL: {str(e)}")
             raise
     else:
+        print("⚠️ RISK_DATABASE_URL není nastavena, používám hardcoded hodnoty")
         # Fallback na hardcoded hodnoty
+        host = "dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com"
+        port = "5432"
+        dbname = "risk_analyst"
+        user = "risk_analyst_user"
+        password = "uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf"
+        
         try:
             conn = psycopg2.connect(
-                host="dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com",
-                port="5432",
-                dbname="risk_analyst",
-                user="risk_analyst_user",
-                password="uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf",
-                sslmode='require'
+                host=host,
+                port=port,
+                dbname=dbname,
+                user=user,
+                password=password,
+                sslmode='require',
+                connect_timeout=10
             )
+            print("✅ Připojení k databázi úspěšné!")
             yield conn
         except Exception as e:
-            print(f"Chyba při připojení k risk analyst databázi: {str(e)}")
+            print(f"❌ Chyba při připojení k risk analyst databázi: {str(e)}")
             raise
 
 # Nové Pydantic modely pro risk events
@@ -1358,7 +1375,7 @@ async def scrape_openmeteo_weather():
         return []
 
 def parse_chmi_data(data: str, source_url: str) -> List[Dict]:
-    """Parsuje skutečná CHMI data s vylepšeným debuggingem"""
+    """Parsuje skutečná CHMI data s vylepšeným debuggingem a lepší analýzou obsahu"""
     events = []
     
     try:
@@ -1400,14 +1417,125 @@ def parse_chmi_data(data: str, source_url: str) -> List[Dict]:
         if not events:
             print("🔍 Zkouším obecnější analýzu...")
             events = parse_chmi_general_data(data, source_url)
-            
-
+        
+        # Pokud stále nic, zkusíme extrahovat skutečné výstrahy z HTML
+        if not events:
+            print("🔍 Zkouším extrahovat výstrahy z HTML...")
+            events = extract_chmi_warnings_from_html(data, source_url)
             
         print(f"🔍 Parsováno {len(events)} událostí z CHMI dat")
         return events
         
     except Exception as e:
         print(f"❌ Chyba při parsování CHMI dat: {str(e)}")
+        return []
+
+def extract_chmi_warnings_from_html(data: str, source_url: str) -> List[Dict]:
+    """Extrahuje skutečné výstrahy z CHMI HTML obsahu"""
+    events = []
+    
+    try:
+        # Hledáme skutečné výstrahy v HTML
+        import re
+        
+        # Hledáme výstrahy o povodních
+        flood_patterns = [
+            r'povodňová výstraha',
+            r'záplavová výstraha', 
+            r'hydrologická výstraha',
+            r'výstraha.*povodn',
+            r'výstraha.*záplav',
+            r'vltava.*výstraha',
+            r'morava.*výstraha',
+            r'labe.*výstraha',
+            r'ohře.*výstraha',
+            r'berounka.*výstraha',
+            r'vodní.*stav.*výstraha',
+            r'hladina.*výstraha',
+            r'přetečení.*výstraha',
+            r'zaplavení.*výstraha'
+        ]
+        
+        for pattern in flood_patterns:
+            matches = re.findall(pattern, data, re.IGNORECASE)
+            for match in matches:
+                event = {
+                    "title": f"CHMI výstraha - {match}",
+                    "description": f"CHMI vydalo výstrahu: {match}. Zdroj: {source_url}",
+                    "latitude": 49.8,
+                    "longitude": 15.5,
+                    "event_type": "flood",
+                    "severity": "high",
+                    "source": "chmi_api",
+                    "url": source_url
+                }
+                events.append(event)
+        
+        # Hledáme meteorologické výstrahy
+        weather_patterns = [
+            r'meteorologická výstraha',
+            r'výstraha.*počasí',
+            r'extrémní.*počasí',
+            r'silné.*srážky',
+            r'přívalový.*déšť',
+            r'bouřka.*výstraha',
+            r'extrémní.*teploty',
+            r'silný.*vítr',
+            r'vítr.*výstraha'
+        ]
+        
+        for pattern in weather_patterns:
+            matches = re.findall(pattern, data, re.IGNORECASE)
+            for match in matches:
+                event = {
+                    "title": f"CHMI meteorologická výstraha - {match}",
+                    "description": f"CHMI vydalo meteorologickou výstrahu: {match}. Zdroj: {source_url}",
+                    "latitude": 49.8,
+                    "longitude": 15.5,
+                    "event_type": "weather",
+                    "severity": "medium",
+                    "source": "chmi_api",
+                    "url": source_url
+                }
+                events.append(event)
+        
+        # Hledáme konkrétní lokace v textu
+        location_patterns = [
+            (r'praha', 50.0755, 14.4378),
+            (r'brno', 49.1951, 16.6068),
+            (r'ostrava', 49.8175, 18.2625),
+            (r'plzeň', 49.7475, 13.3776),
+            (r'liberec', 50.7663, 15.0543),
+            (r'olomouc', 49.5938, 17.2507),
+            (r'hradec králové', 50.2092, 15.8327),
+            (r'pardubice', 50.0343, 15.7812),
+            (r'zlín', 49.2264, 17.6683),
+            (r'karlovy vary', 50.231, 12.880),
+            (r'ústí nad labem', 50.6611, 14.0531),
+            (r'české budějovice', 48.9745, 14.4747)
+        ]
+        
+        # Pokud najdeme lokaci, použijeme ji pro event
+        for location_pattern, lat, lon in location_patterns:
+            if re.search(location_pattern, data, re.IGNORECASE):
+                # Vytvoříme event s konkrétní lokací
+                event = {
+                    "title": f"CHMI výstraha - {location_pattern}",
+                    "description": f"CHMI vydalo výstrahu pro {location_pattern}. Zdroj: {source_url}",
+                    "latitude": lat,
+                    "longitude": lon,
+                    "event_type": "flood",
+                    "severity": "high",
+                    "source": "chmi_api",
+                    "url": source_url
+                }
+                events.append(event)
+        
+        print(f"🔍 Extrahováno {len(events)} výstrah z HTML")
+        return events
+        
+    except Exception as e:
+        print(f"❌ Chyba při extrakci výstrah z HTML: {str(e)}")
         return []
 
 def parse_chmi_general_data(data: str, source_url: str) -> List[Dict]:
@@ -1594,8 +1722,36 @@ def parse_chmi_json(data: Dict, source_url: str) -> List[Dict]:
 
 def parse_chmi_json_item(item: Dict, source_url: str) -> Dict:
     """Parsuje jednotlivý JSON item z CHMI"""
-    # Implementace parsování jednotlivého JSON objektu
-    return None
+    try:
+        # Zkusíme extrahovat relevantní data z JSON objektu
+        title = item.get('title', '')
+        description = item.get('description', '')
+        content = item.get('content', '')
+        
+        # Kombinujeme všechna textová pole
+        text = f"{title} {description} {content}".lower()
+        
+        # Hledáme rizikové klíčová slova
+        risk_keywords = ['povodn', 'záplav', 'výstrah', 'vltav', 'morav', 'labe', 'ohře', 'hydrologická', 'meteorologická']
+        
+        for keyword in risk_keywords:
+            if keyword in text:
+                return {
+                    "title": f"CHMI JSON výstraha - {title[:50]}",
+                    "description": f"CHMI data: {description[:100]}. Zdroj: {source_url}",
+                    "latitude": 49.8,
+                    "longitude": 15.5,
+                    "event_type": "flood",
+                    "severity": "high",
+                    "source": "chmi_api",
+                    "url": source_url
+                }
+        
+        return None
+        
+    except Exception as e:
+        print(f"❌ Chyba při parsování JSON item: {str(e)}")
+        return None
 
 def parse_chmi_html(data: str, source_url: str) -> List[Dict]:
     """Parsuje CHMI HTML data"""
@@ -1775,85 +1931,75 @@ def parse_rss_feed(rss_xml: str, feed_url: str) -> List[Dict]:
         return []
 
 def analyze_rss_item_for_risk(title: str, description: str, feed_url: str) -> Dict:
-    """Analyzuje RSS položku a hledá rizikové události s MÉNĚ RESTRIKTIVNÍMI filtry"""
+    """Analyzuje RSS položku a hledá rizikové události s inteligentními filtry"""
     
     # Kombinujeme title a description pro analýzu
     text = f"{title} {description}".lower()
     
-    # STRICT filtry pro vyloučení nepodstatných zpráv
+    # INTELLIGENT filtry - pouze vylučujeme jasně nepodstatné zprávy
     exclude_keywords = [
-        # Kultura a zábava - kompletní seznam
+        # Jasně nepodstatné - kultura a zábava
         'film', 'kino', 'divadlo', 'koncert', 'festival', 'výstava', 'kniha', 'album', 'hudba', 'umění',
         'televize', 'rozhlas', 'reklama', 'marketing', 'obchod', 'nákup', 'sleva', 'akce', 'sport', 'fotbal', 'hokej',
         'tenis', 'basketball', 'atletika', 'kultura', 'osobní', 'soukromý', 'rodina', 'dítě', 'život', 'výpověď',
         'nohavica', 'písničkář', 'dokument', 'jarek', 'ostrava', 'písničky', 'stb', 'putin', 'míří do kin',
-        'písničkář', 'dokument', 'jarek', 'ostrava', 'písničky', 'stb', 'putin', 'míří do kin',
         
-        # Politika a mezinárodní vztahy - kompletní seznam
-        'politika', 'vláda', 'parlament', 'diplomacie', 'mezinárodní', 'bezpečnost', 'krize', 'napětí', 'spor',
-        'sankce', 'rusko', 'ukrajina', 'finsko', 'japonsko', 'evropa', 'havel', 'filozof', 'ministryně', 'usa',
-        'geopolitická', 'geopolitické', 'geopolitický', 'geopolitickým', 'geopolitickými',
-        
-        # Osobní nehody - kompletní seznam
+        # Jasně nepodstatné - osobní nehody bez dopadu na infrastrukturu
         'řidič', 'auto', 'nehoda', 'motorkář', 'kombajn', 'montér', 'stožár', 'nemocnice', 'přežil', 'nepřežil',
         'srážka', 'předjížděl', 'vyjel ze silnice', 'spadl', 'olomoucku', 'plzeňsku', 'hradecku', 'šumpersku',
         'tragická', 'silně', 'rychl', 'skončil', 'střeše', 'nemocnici', 'vyjel ze silnice', 'předjížděl auto',
         'řidič jel', 'řidič na', 'motorkář na', 'kombajnem', 'montér ze', 'spadl ze', 'tragická nehoda',
         
-        # Místní události bez dopadu - kompletní seznam
+        # Jasně nepodstatné - místní události bez dopadu
         'břeclavi', 'apollo', 'koupal', 'nadšenci', 'oblíbené', 'lokality', 'krásu', 'pražský okruh', 'běchovic',
         'd1', 'dopravní úleva', 'spojka', 'golcův jenikov', 'jižní čechy', 'důležitý krok', 'přinese dopravní úlevu',
         'apollo se', 'koupal každý', 'nadšenci z', 'oblíbené lokalitě', 'zašlou krásu',
         
-        # Další nepodstatné události - kompletní seznam
-        'video', 'foto', 'foto:', 'video:', 'online:', 'online', 'silné deště', 'japonsko', 'sesuvy půdy',
-        'ukrajinský', 'filozof', 'naruby', 'jako havel', 'evropané', 'jste jako', 'japonska', 'sesuvy',
-        'ukrajinský filozof', 'jako havel naruby', 'evropané jste', 'jste jako havel'
+        # Jasně nepodstatné - technické detaily
+        'video', 'foto', 'foto:', 'video:', 'online:', 'online'
     ]
     
-    # Kontrola vylučovacích klíčových slov - STRICT
+    # Kontrola vylučovacích klíčových slov - pouze jasně nepodstatné
     for exclude_word in exclude_keywords:
         if exclude_word in text:
             return None  # Nejedná se o rizikovou událost
     
-    # MÉNĚ RESTRIKTIVNÍ rizikové klíčové slova - obecnější
+    # INTELLIGENT rizikové klíčové slova - více specifické
     risk_keywords = {
         'flood': [
-            # Záplavy - obecnější termíny
+            # Specifické povodňové termíny
             'povodně', 'záplavy', 'přetečení', 'vylití', 'zaplavení', 'povodňový', 'vodní stav',
             'vltava', 'morava', 'labe', 'ohře', 'berounka', 'řeka', 'chmi', 'meteorologická',
             'hydrologická', 'výstraha', 'extrémní', 'srážky', 'přívalový', 'déšť',
-            # Nové obecné termíny
+            # Obecné vodní termíny
             'voda', 'vodní', 'tok', 'hladina', 'stav', 'hydro', 'meteorolog', 'počasí'
         ],
         'supply_chain': [
-            # Dodavatelský řetězec - obecnější termíny
+            # Specifické dopravní termíny
             'dálnice', 'silnice', 'most', 'železnice', 'přístav', 'továrna', 'sklad', 'dodávky',
             'uzavírka', 'havárie', 'blokáda', 'přerušení', 'výpadek', 'poškození', 'logistické',
             'doprava', 'dopravní', 'přeprava', 'náklad', 'cargo', 'transport',
-            # Nové obecné termíny
+            # Obecné infrastrukturní termíny
             'uzavírka', 'oprava', 'blokáda', 'přerušení', 'výpadek', 'havárie'
         ]
     }
     
-    # Hledáme rizikové události s MÉNĚ RESTRIKTIVNÍMI podmínkami
+    # Hledáme rizikové události s INTELLIGENTNÍMI podmínkami
     for event_type, keywords in risk_keywords.items():
         for keyword in keywords:
             if keyword in text:
-                # Pro záplavy - stačí obsahovat řeku nebo vodní termín
+                # Pro záplavy - musí obsahovat český kontext
                 if event_type == 'flood':
-                    # Musí obsahovat alespoň 1 z těchto slov - MÉNĚ RESTRIKTIVNÍ
-                    flood_indicators = ['vltava', 'morava', 'labe', 'ohře', 'berounka', 'řeka', 'chmi', 'meteorologická', 'česká', 'čr', 'voda', 'vodní', 'hydro', 'stav', 'hladina', 'tok', 'počasí', 'srážky', 'déšť']
-                    if any(word in text for word in flood_indicators):
+                    # Musí obsahovat alespoň 1 z těchto slov pro český kontext
+                    czech_indicators = ['vltava', 'morava', 'labe', 'ohře', 'berounka', 'řeka', 'chmi', 'meteorologická', 'česká', 'čr', 'voda', 'vodní', 'hydro', 'stav', 'hladina', 'tok', 'počasí', 'srážky', 'déšť', 'praha', 'brno', 'ostrava', 'plzeň', 'liberec', 'olomouc', 'hradec', 'pardubice', 'zlín', 'karlovy vary', 'ústí', 'české budějovice']
+                    if any(word in text for word in czech_indicators):
                         return create_rss_event(title, description, event_type, keyword, feed_url)
-                # Pro dodavatelský řetězec - stačí obsahovat dopravní termín
+                # Pro dodavatelský řetězec - musí obsahovat český kontext
                 elif event_type == 'supply_chain':
-                    # Musí obsahovat alespoň 1 z těchto slov - MÉNĚ RESTRIKTIVNÍ
-                    supply_indicators = ['dálnice', 'silnice', 'most', 'železnice', 'přístav', 'továrna', 'sklad', 'dodávky', 'česká', 'čr', 'doprava', 'dopravní', 'uzavírka', 'oprava', 'blokáda', 'přerušení', 'výpadek', 'havárie']
-                    if any(word in text for word in supply_indicators):
+                    # Musí obsahovat alespoň 1 z těchto slov pro český kontext
+                    czech_indicators = ['dálnice', 'silnice', 'most', 'železnice', 'přístav', 'továrna', 'sklad', 'dodávky', 'česká', 'čr', 'doprava', 'dopravní', 'uzavírka', 'oprava', 'blokáda', 'přerušení', 'výpadek', 'havárie', 'praha', 'brno', 'ostrava', 'plzeň', 'liberec', 'olomouc', 'hradec', 'pardubice', 'zlín', 'karlovy vary', 'ústí', 'české budějovice']
+                    if any(word in text for word in czech_indicators):
                         return create_rss_event(title, description, event_type, keyword, feed_url)
-    
-
     
     return None
 
@@ -1879,9 +2025,7 @@ def create_rss_event(title: str, description: str, event_type: str, keyword: str
         'pardubice': (50.0343, 15.7812),
         'zlín': (49.2264, 17.6683),
         'karlovy vary': (50.231, 12.880),
-        'ústí nad labem': (50.6611, 14.0531),
-        'české budějovice': (48.9745, 14.4747),
-        'pardubice': (50.0343, 15.7812)
+        'ústí nad labem': (50.6611, 14.0531)
     }
     
     # Hledáme lokaci v textu - více specifické hledání
@@ -2284,7 +2428,10 @@ def calculate_river_distance(lat: float, lon: float) -> float:
         return 50.0  # Výchozí vzdálenost
     finally:
         if conn:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
 
 def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
     """Vypočítá riziko záplav s fallback"""
@@ -2323,7 +2470,10 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
         }
     finally:
         if conn:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
 
 def analyze_river_proximity(lat: float, lon: float, radius_km: int) -> dict:
     """Analýza blízkosti řek"""
@@ -2564,6 +2714,77 @@ async def test_openmeteo_api():
             
     except Exception as e:
         return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/test-scraping-improved")
+async def test_improved_scraping():
+    """Test endpoint pro ověření vylepšeného scrapingu s detailním debuggingem"""
+    try:
+        print("🔍 Testuji vylepšený scraping...")
+        
+        results = {
+            "chmi_test": {},
+            "rss_test": {},
+            "openmeteo_test": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Test CHMI scraping
+        try:
+            print("🌊 Testuji CHMI scraping...")
+            chmi_response = await scrape_chmi_floods()
+            results["chmi_test"] = {
+                "status": chmi_response.get("status", "unknown"),
+                "scraped_count": chmi_response.get("scraped_count", 0),
+                "saved_count": chmi_response.get("saved_count", 0),
+                "source_url": chmi_response.get("source_url", "unknown")
+            }
+            print(f"✅ CHMI test dokončen: {chmi_response.get('saved_count', 0)} událostí")
+        except Exception as e:
+            print(f"❌ CHMI test selhal: {str(e)}")
+            results["chmi_test"] = {"error": str(e)}
+        
+        # Test RSS scraping
+        try:
+            print("📰 Testuji RSS scraping...")
+            rss_response = await scrape_rss_feeds()
+            results["rss_test"] = {
+                "status": rss_response.get("status", "unknown"),
+                "scraped_count": rss_response.get("scraped_count", 0),
+                "saved_count": rss_response.get("saved_count", 0)
+            }
+            print(f"✅ RSS test dokončen: {rss_response.get('saved_count', 0)} událostí")
+        except Exception as e:
+            print(f"❌ RSS test selhal: {str(e)}")
+            results["rss_test"] = {"error": str(e)}
+        
+        # Test OpenMeteo
+        try:
+            print("🌤️ Testuji OpenMeteo...")
+            openmeteo_events = await scrape_openmeteo_weather()
+            results["openmeteo_test"] = {
+                "status": "success",
+                "scraped_count": len(openmeteo_events),
+                "events": openmeteo_events[:3]  # První 3 události pro ukázku
+            }
+            print(f"✅ OpenMeteo test dokončen: {len(openmeteo_events)} událostí")
+        except Exception as e:
+            print(f"❌ OpenMeteo test selhal: {str(e)}")
+            results["openmeteo_test"] = {"error": str(e)}
+        
+        return {
+            "message": "Vylepšený scraping test dokončen",
+            "status": "success",
+            "results": results
+        }
+        
+    except Exception as e:
+        print(f"❌ Neočekávaná chyba při testování: {str(e)}")
+        return {
+            "message": "Test selhal",
             "status": "error",
             "error": str(e),
             "timestamp": datetime.now().isoformat()

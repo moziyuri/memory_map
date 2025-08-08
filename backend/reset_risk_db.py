@@ -116,30 +116,45 @@ def reset_risk_db():
                 cur.execute("""
                     INSERT INTO vw_suppliers (name, location, category, risk_level)
                     VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
-                    ON CONFLICT (name) DO UPDATE SET
-                        location = EXCLUDED.location,
-                        category = EXCLUDED.category,
-                        risk_level = EXCLUDED.risk_level,
-                        created_at = NOW()
+                    ON CONFLICT (name) DO NOTHING
                 """, (supplier[0], supplier[2], supplier[1], supplier[3], supplier[4]))
             except Exception as e:
                 print(f"⚠️ Chyba při vkládání dodavatele {supplier[0]}: {e}")
+                # Pokračujeme s dalšími dodavateli místo přerušení transakce
+                continue
 
         print("✅ Dodavatelé vloženi")
         
         # Commit transakce
-        conn.commit()
-        print("✅ Databáze úspěšně resetována a inicializována")
-        return True
+        try:
+            conn.commit()
+            print("✅ Databáze úspěšně resetována a inicializována")
+            return True
+        except Exception as e:
+            print(f"❌ Chyba při commitování transakce: {str(e)}")
+            try:
+                conn.rollback()
+                print("🔄 Transakce byla rollbackována")
+            except Exception as rollback_error:
+                print(f"⚠️ Chyba při rollbacku: {str(rollback_error)}")
+            return False
         
     except Exception as e:
         print(f"❌ Chyba při resetování databáze: {str(e)}")
-        if conn:
-            conn.rollback()
+        try:
+            if conn:
+                conn.rollback()
+                print("🔄 Transakce byla rollbackována kvůli chybě")
+        except Exception as rollback_error:
+            print(f"⚠️ Chyba při rollbacku: {str(rollback_error)}")
         return False
     finally:
-        if conn:
-            conn.close()
+        try:
+            if conn:
+                conn.close()
+                print("🔌 Připojení k databázi uzavřeno")
+        except Exception as close_error:
+            print(f"⚠️ Chyba při uzavírání připojení: {str(close_error)}")
 
 if __name__ == "__main__":
     print("=" * 50)
