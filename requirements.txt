@@ -1,9 +1,22 @@
+# Main requirements.txt - Python 3.13 compatible
+# Backend dependencies
 fastapi==0.109.2
 uvicorn==0.27.1
 psycopg2-binary==2.9.9
 python-multipart==0.0.9
 pydantic==2.6.1
 python-dotenv==1.0.1
-spacy==3.7.4
+requests==2.31.0
+
+# GIS and data processing
 geopandas==0.14.3
-folium==0.15.1 
+shapely==2.0.3
+folium==0.15.1
+
+# NLP (optional - can be installed separately)
+# spacy==3.7.4  # Commented out - requires separate installation
+
+# Frontend dependencies (for local development)
+streamlit==1.28.1
+streamlit-folium==0.13.0
+pandas==2.2.3 

@@ -5,12 +5,10 @@ services:
     plan: free
     buildCommand: |
       pip install -r backend/requirements.txt
-      python backend/clear_all_data.py
+      python backend/init_risk_db.py
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.12
-      - key: DATABASE_URL
-        value: postgresql://risk_analyst_user:uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf@dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com/risk_analyst
-      - key: RISK_DATABASE_URL
-        value: postgresql://risk_analyst_user:uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf@dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com/risk_analyst 
+        value: 3.11.0  # Updated for better compatibility
+      # ⚠️ DATABASE_URL and RISK_DATABASE_URL should be set in Render.com dashboard
+      # ⚠️ Remove hardcoded credentials for security 

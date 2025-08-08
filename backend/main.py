@@ -31,7 +31,7 @@ load_dotenv()
 # Vytvoření FastAPI aplikace s vlastním názvem
 app = FastAPI(title="MemoryMap API")
 
-# Konfigurace CORS
+# Konfigurace CORS - BEZPEČNOSTNÍ OPRAVA
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -41,10 +41,10 @@ app.add_middleware(
         "https://localhost:8501",
         "https://memory-map.onrender.com",  # Správná Render.com URL
         "https://memorymap-api.onrender.com",  # Ponecháme pro případ
-        "*"  # Pro vývoj - v produkci by mělo být specifické
+        # ⚠️ ODSTRANĚNO: "*" - příliš permissivní pro bezpečnost
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Specifické metody místo "*"
     allow_headers=["*"],
 )
 
@@ -716,32 +716,17 @@ if __name__ == "__main__":
 def get_risk_db():
     """Získá připojení k risk analyst databázi"""
     try:
-        # Zkusíme environment variable, pak fallback
+        # Používáme pouze environment variables pro bezpečnost
         database_url = os.getenv('RISK_DATABASE_URL')
         
-        if database_url:
-            print(f"🔗 Připojuji k databázi přes RISK_DATABASE_URL...")
-            # Zvýšíme timeout na 30 sekund
-            conn = psycopg2.connect(database_url, sslmode='require', connect_timeout=30)
-        else:
-            print("⚠️ RISK_DATABASE_URL není nastavena, používám hardcoded hodnoty")
-            # Fallback na hardcoded hodnoty
-            host = "dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com"
-            port = "5432"
-            dbname = "risk_analyst"
-            user = "risk_analyst_user"
-            password = "uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf"
-            
-            # Zvýšíme timeout na 30 sekund
-            conn = psycopg2.connect(
-                host=host,
-                port=port,
-                dbname=dbname,
-                user=user,
-                password=password,
-                sslmode='require',
-                connect_timeout=30
-            )
+        if not database_url:
+            print("❌ KRITICKÁ CHYBA: RISK_DATABASE_URL není nastavena!")
+            print("⚠️ Pro bezpečnost nejsou povoleny hardcoded credentials")
+            return None
+        
+        print(f"🔗 Připojuji k databázi přes RISK_DATABASE_URL...")
+        # Zvýšíme timeout na 30 sekund
+        conn = psycopg2.connect(database_url, sslmode='require', connect_timeout=30)
         
         print("✅ Připojení k databázi úspěšné!")
         return conn

@@ -1,9 +1,16 @@
+# Backend requirements.txt - Python 3.13 compatible
+# Core FastAPI dependencies
 fastapi==0.109.2
 uvicorn==0.27.1
 psycopg2-binary==2.9.9
 python-multipart==0.0.9
 pydantic==2.6.1
 python-dotenv==1.0.1
+requests==2.31.0
+
+# GIS and data processing
 geopandas==0.14.3
 shapely==2.0.3
-requests==2.31.0 
+
+# Optional: NLP (uncomment if needed)
+# spacy==3.7.4 

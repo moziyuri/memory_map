@@ -21,26 +21,9 @@ def init_risk_db():
             print(f"❌ Chyba při připojení přes DATABASE_URL: {str(e)}")
             return False
     else:
-        print("⚠️ RISK_DATABASE_URL není nastavena, používám hardcoded hodnoty")
-        # Fallback na hardcoded hodnoty
-        host = "dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com"
-        port = "5432"
-        dbname = "risk_analyst"
-        user = "risk_analyst_user"
-        password = "uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf"
-        
-        try:
-            conn = psycopg2.connect(
-                host=host,
-                port=port,
-                dbname=dbname,
-                user=user,
-                password=password,
-                sslmode='require'
-            )
-        except Exception as e:
-            print(f"❌ Chyba při připojení: {str(e)}")
-            return False
+        print("❌ KRITICKÁ CHYBA: RISK_DATABASE_URL není nastavena!")
+        print("⚠️ Pro bezpečnost nejsou povoleny hardcoded credentials")
+        return False
     
     print("✅ Připojení k databázi úspěšné!")
     

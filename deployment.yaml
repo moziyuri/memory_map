@@ -1,0 +1,81 @@
+# Unified Deployment Configuration
+# This file consolidates all deployment settings for better maintainability
+
+# Environment Configuration
+environment:
+  python_version: "3.11.0"
+  node_version: "18.0.0"  # For any Node.js dependencies
+
+# Database Configuration
+database:
+  type: "postgresql"
+  ssl_mode: "require"
+  connection_timeout: 30
+  pool_size: 10
+  
+# Security Configuration
+security:
+  cors:
+    allowed_origins:
+      - "https://stanislavhoracekmemorymap.streamlit.app"
+      - "https://memory-map-feature-risk-analyst-frontend-app.onrender.com"
+      - "http://localhost:8501"
+      - "https://localhost:8501"
+      - "https://memory-map.onrender.com"
+      - "https://memorymap-api.onrender.com"
+    allowed_methods: ["GET", "POST", "PUT", "DELETE"]
+    allowed_headers: ["*"]
+    allow_credentials: true
+  
+  environment_variables:
+    required:
+      - "RISK_DATABASE_URL"
+      - "DATABASE_URL"
+    optional:
+      - "OPENWEATHER_API_KEY"
+      - "CHMI_API_KEY"
+
+# Build Configuration
+build:
+  backend:
+    requirements_file: "backend/requirements.txt"
+    build_command: |
+      pip install -r backend/requirements.txt
+      python backend/init_risk_db.py
+    start_command: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+  
+  frontend:
+    requirements_file: "frontend/requirements.txt"
+    build_command: "pip install -r frontend/requirements.txt"
+    start_command: "streamlit run frontend/app.py --server.port $PORT"
+
+# Health Checks
+health_checks:
+  backend:
+    endpoint: "/api/health"
+    timeout: 30
+    interval: 60
+  
+  frontend:
+    endpoint: "/"
+    timeout: 30
+    interval: 60
+
+# Monitoring
+monitoring:
+  logging:
+    level: "INFO"
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  metrics:
+    enabled: true
+    endpoints:
+      - "/api/health"
+      - "/api/risks"
+      - "/api/suppliers"
+
+# Error Handling
+error_handling:
+  max_retries: 3
+  retry_delay: 5
+  timeout: 30 
