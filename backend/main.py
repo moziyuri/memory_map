@@ -2053,7 +2053,10 @@ def analyze_rss_item_for_risk(title: str, description: str, feed_url: str) -> Di
         'apollo se', 'koupal každý', 'nadšenci z', 'oblíbené lokalitě', 'zašlou krásu',
         
         # Jasně nepodstatné - technické detaily
-        'video', 'foto', 'foto:', 'video:', 'online:', 'online'
+        'video', 'foto', 'foto:', 'video:', 'online:', 'online',
+
+        # Právní/krimi - nechceme
+        'ikem', 'soud', 'soudní', 'vydírání', 'obžalován', 'obžaloba', 'policie', 'krimi', 'vyšetřování'
     ]
     
     # Kontrola vylučovacích klíčových slov - pouze jasně nepodstatné
@@ -2062,42 +2065,27 @@ def analyze_rss_item_for_risk(title: str, description: str, feed_url: str) -> Di
             return None  # Nejedná se o rizikovou událost
     
     # INTELLIGENT rizikové klíčové slova - více specifické
-    risk_keywords = {
-        'flood': [
-            # Specifické povodňové termíny
-            'povodně', 'záplavy', 'přetečení', 'vylití', 'zaplavení', 'povodňový', 'vodní stav',
-            'vltava', 'morava', 'labe', 'ohře', 'berounka', 'řeka', 'chmi', 'meteorologická',
-            'hydrologická', 'výstraha', 'extrémní', 'srážky', 'přívalový', 'déšť',
-            # Obecné vodní termíny
-            'voda', 'vodní', 'tok', 'hladina', 'stav', 'hydro', 'meteorolog', 'počasí'
-        ],
-        'supply_chain': [
-            # Specifické dopravní termíny
-            'dálnice', 'silnice', 'most', 'železnice', 'přístav', 'továrna', 'sklad', 'dodávky',
-            'uzavírka', 'havárie', 'blokáda', 'přerušení', 'výpadek', 'poškození', 'logistické',
-            'doprava', 'dopravní', 'přeprava', 'náklad', 'cargo', 'transport',
-            # Obecné infrastrukturní termíny
-            'uzavírka', 'oprava', 'blokáda', 'přerušení', 'výpadek', 'havárie'
-        ]
-    }
-    
-    # Hledáme rizikové události s INTELLIGENTNÍMI podmínkami
-    for event_type, keywords in risk_keywords.items():
-        for keyword in keywords:
-            if keyword in text:
-                # Pro záplavy - musí obsahovat český kontext
-                if event_type == 'flood':
-                    # Musí obsahovat alespoň 1 z těchto slov pro český kontext
-                    czech_indicators = ['vltava', 'morava', 'labe', 'ohře', 'berounka', 'řeka', 'chmi', 'meteorologická', 'česká', 'čr', 'voda', 'vodní', 'hydro', 'stav', 'hladina', 'tok', 'počasí', 'srážky', 'déšť', 'praha', 'brno', 'ostrava', 'plzeň', 'liberec', 'olomouc', 'hradec', 'pardubice', 'zlín', 'karlovy vary', 'ústí', 'české budějovice']
-                    if any(word in text for word in czech_indicators):
-                        return create_rss_event(title, description, event_type, keyword, feed_url)
-                # Pro dodavatelský řetězec - musí obsahovat český kontext
-                elif event_type == 'supply_chain':
-                    # Musí obsahovat alespoň 1 z těchto slov pro český kontext
-                    czech_indicators = ['dálnice', 'silnice', 'most', 'železnice', 'přístav', 'továrna', 'sklad', 'dodávky', 'česká', 'čr', 'doprava', 'dopravní', 'uzavírka', 'oprava', 'blokáda', 'přerušení', 'výpadek', 'havárie', 'praha', 'brno', 'ostrava', 'plzeň', 'liberec', 'olomouc', 'hradec', 'pardubice', 'zlín', 'karlovy vary', 'ústí', 'české budějovice']
-                    if any(word in text for word in czech_indicators):
-                        return create_rss_event(title, description, event_type, keyword, feed_url)
-    
+    # Striktnější pravidla detekce
+    hydrology_core = ['povodn', 'záplav', 'přeteč', 'vylit', 'zaplaven', 'povodň']
+    # Tvrdé vyloučení právních/krimi formulací přimo v analýze (belt-and-suspenders)
+    if any(k in text for k in ['ikem', 'soud', 'vydír', 'obžal', 'policie', 'krimi', 'vyšetřov']):
+        return None
+    river_terms = ['vltava', 'morava', 'labe', 'ohře', 'berounka', 'řeka', 'povodí', 'koryto', 'hladina']
+    meteo_terms = ['chmi', 'hydro', 'meteorolog', 'hydrologická', 'meteorologická', 'výstraha']
+    transport_terms = ['dálnice', 'silnice', 'most', 'železnice', 'přístav', 'sklad', 'logist', 'uzavírka', 'oprava', 'blokáda']
+
+    # Flood: musíme mít hydrologické jádro + (řeka nebo CHMI/meteo kontext) + lokalizaci v ČR
+    if any(k in text for k in hydrology_core) and (any(t in text for t in river_terms) or any(t in text for t in meteo_terms)):
+        evt = create_rss_event(title, description, 'flood', 'hydro', feed_url)
+        if evt is not None:
+            return evt
+
+    # Supply chain: vyžadujeme jasné dopravní/infrastrukturní termíny + lokalizaci v ČR
+    if any(t in text for t in transport_terms):
+        evt = create_rss_event(title, description, 'supply_chain', 'transport', feed_url)
+        if evt is not None:
+            return evt
+
     return None
 
 def create_rss_event(title: str, description: str, event_type: str, keyword: str, feed_url: str) -> Dict:
@@ -2126,7 +2114,8 @@ def create_rss_event(title: str, description: str, event_type: str, keyword: str
     }
     
     # Hledáme lokaci v textu - více specifické hledání
-    latitude, longitude = 50.0, 14.3  # Výchozí - střed ČR
+    latitude = None
+    longitude = None
     location_found = False
     
     # Nejdříve hledáme v title
@@ -2143,6 +2132,10 @@ def create_rss_event(title: str, description: str, event_type: str, keyword: str
                 latitude, longitude = coords
                 break
     
+    # Pokud jsme nedokázali najít polohu, událost nevracíme
+    if latitude is None or longitude is None:
+        return None
+
     return {
         "title": title[:100],  # Omezíme délku title
         "description": f"{description[:150] if description else f'Událost související s {keyword}'} | Zdroj: {feed_url}",
@@ -2318,9 +2311,11 @@ async def river_flood_simulation(
                     "supplier": dict(supplier),
                     "flood_simulation": flood_risk,
                     "risk_assessment": {
-                        "flood_probability": flood_risk['probability'],
-                        "impact_level": flood_risk['impact_level'],
-                        "mitigation_needed": flood_risk['mitigation_needed']
+                        "flood_probability": flood_risk.get('probability', 0),
+                        "impact_level": flood_risk.get('impact_level', 'low'),
+                        "mitigation_needed": flood_risk.get('mitigation_needed', (
+                            flood_risk.get('probability', 0) > 0.5 or flood_risk.get('impact_level', 'low') in ['high', 'critical']
+                        ))
                     }
                 }
             else:
@@ -2547,7 +2542,8 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
                 'probability': probability,
                 'impact_level': impact_level,
                 'river_distance_km': river_distance,
-                'nearest_river_name': 'Neznámá'
+                'nearest_river_name': 'Neznámá',
+                'mitigation_needed': probability > 0.5 or impact_level in ['high', 'critical']
             }
         with conn.cursor() as cur:
             # Zkusíme použít PostGIS funkci
@@ -2555,9 +2551,15 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
                 cur.execute("SELECT analyze_flood_risk_from_rivers(%s, %s, %s)", (lat, lon, flood_level_m))
                 result = cur.fetchone()
                 if result and result[0] is not None:
-                    return result[0]
+                    out = result[0]
+                    if isinstance(out, dict) and 'mitigation_needed' not in out:
+                        prob = out.get('probability', 0)
+                        impact = out.get('impact_level', 'low')
+                        out['mitigation_needed'] = prob > 0.5 or impact in ['high', 'critical']
+                    return out
             except Exception as e:
-                print(f"⚠️ PostGIS funkce analyze_flood_risk_from_rivers nefunguje: {e}")
+                # Příliš hlučné v produkci – ponecháme jen info
+                print("ℹ️ PostGIS analyze_flood_risk_from_rivers není k dispozici, používám fallback")
             
             # Fallback - jednoduchý výpočet
             river_distance = calculate_river_distance(lat, lon)
@@ -2568,7 +2570,8 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
                 'probability': probability,
                 'impact_level': impact_level,
                 'river_distance_km': river_distance,
-                'nearest_river_name': 'Vltava' if lat > 49.5 else 'Morava' if lat < 49.5 else 'Labe'
+                'nearest_river_name': 'Vltava' if lat > 49.5 else 'Morava' if lat < 49.5 else 'Labe',
+                'mitigation_needed': probability > 0.5 or impact_level in ['high', 'critical']
             }
             
     except Exception as e:
@@ -2577,7 +2580,8 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
             'probability': 0.1,
             'impact_level': 'low',
             'river_distance_km': 50.0,
-            'nearest_river_name': 'Neznámá'
+            'nearest_river_name': 'Neznámá',
+            'mitigation_needed': False
         }
     finally:
         if conn:
@@ -2792,6 +2796,45 @@ async def clear_geopolitical_events():
     finally:
         if conn:
             conn.close()
+
+@app.post("/api/maintenance/clear-irrelevant-rss")
+async def clear_irrelevant_rss_events():
+    """Smaže z databáze zjevně irelevantní RSS události (právo/krimi apod.)."""
+    conn = None
+    try:
+        conn = get_risk_db()
+        if conn is None:
+            raise HTTPException(status_code=500, detail="Database connection unavailable")
+        deleted_total = 0
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM risk_events
+                WHERE source = 'rss'
+                  AND (
+                        lower(title) LIKE '%ikem%'
+                     OR lower(title) LIKE '%soud%'
+                     OR lower(title) LIKE '%vydír%'
+                     OR lower(title) LIKE '%obžal%'
+                     OR lower(title) LIKE '%policie%'
+                     OR lower(title) LIKE '%krimi%'
+                     OR lower(title) LIKE '%vyšetřov%'
+                  )
+                """
+            )
+            deleted_total = cur.rowcount
+            conn.commit()
+        return {"status": "success", "deleted": deleted_total}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 @app.get("/api/test-openmeteo")
 async def test_openmeteo_api():

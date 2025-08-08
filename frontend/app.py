@@ -8,6 +8,7 @@ Zaměřeno na monitoring záplav, dopravních problémů a jejich dopad na dodav
 
 import streamlit as st
 import folium
+from folium.plugins import MarkerCluster
 from streamlit_folium import folium_static
 import pandas as pd
 import requests
@@ -32,10 +33,56 @@ CZECH_BOUNDS = {
 # Environment variables
 BACKEND_URL = os.getenv('BACKEND_URL', 'https://risk-analyst.onrender.com')
 
+# Konzistentní zobrazení hodnot
+EVENT_TYPE_LABEL = {
+    'flood': 'Povodně',
+    'supply_chain': 'Dodavatelský řetězec',
+    'weather': 'Počasí'
+}
+
+SEVERITY_LABEL = {
+    'low': 'Nízká',
+    'medium': 'Střední',
+    'high': 'Vysoká',
+    'critical': 'Kritická'
+}
+
+SOURCE_LABEL = {
+    'rss': 'Zpravodajství (RSS)',
+    'chmi_api': 'ČHMÚ',
+    'openmeteo': 'OpenMeteo',
+}
+
+def format_dt(value: str) -> str:
+    try:
+        # Podpora ISO formátu i bez 'T'
+        v = value
+        if isinstance(v, str):
+            if 'T' in v:
+                return datetime.fromisoformat(v.replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M')
+            return v
+        return str(v)
+    except Exception:
+        return str(value)
+
 def is_in_czech_republic(lat, lon):
     """Kontrola, zda bod leží v České republice"""
     return (CZECH_BOUNDS['min_lat'] <= lat <= CZECH_BOUNDS['max_lat'] and
             CZECH_BOUNDS['min_lon'] <= lon <= CZECH_BOUNDS['max_lon'])
+
+def sanitize_coords(lat, lon):
+    """Heuristika: pokud bod neleží v ČR, ale prohození dává smysl, prohodíme (častá chyba lat/lon)."""
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except Exception:
+        return lat, lon
+    if is_in_czech_republic(lat_f, lon_f):
+        return lat_f, lon_f
+    # Swap check
+    if is_in_czech_republic(lon_f, lat_f):
+        return lon_f, lat_f
+    return lat_f, lon_f
 
 def test_backend_connection():
     """Test připojení k backendu"""
@@ -45,46 +92,55 @@ def test_backend_connection():
     except:
         return False
 
+@st.cache_data(ttl=120)
 def get_risk_events():
-    """Získání rizikových událostí z API"""
+    """Získání rizikových událostí z API (s cachingem)"""
     try:
-        response = requests.get(f"{BACKEND_URL}/api/risks", timeout=10)
+        response = requests.get(f"{BACKEND_URL}/api/risks", timeout=15)
         if response.status_code == 200:
             return response.json()
         else:
-            st.sidebar.error(f"❌ Chyba při načítání událostí: {response.status_code}")
             return []
-    except Exception as e:
-        st.sidebar.error(f"❌ Chyba připojení k API: {str(e)}")
+    except Exception:
         return []
 
+@st.cache_data(ttl=300)
 def get_suppliers():
-    """Získání dodavatelů z API"""
+    """Získání dodavatelů z API (s cachingem)"""
     try:
-        response = requests.get(f"{BACKEND_URL}/api/suppliers", timeout=10)
+        response = requests.get(f"{BACKEND_URL}/api/suppliers", timeout=15)
         if response.status_code == 200:
             return response.json()
         else:
-            st.sidebar.error(f"❌ Chyba při načítání dodavatelů: {response.status_code}")
             return []
-    except Exception as e:
-        st.sidebar.error(f"❌ Chyba připojení k API: {str(e)}")
+    except Exception:
         return []
 
-def get_advanced_analysis():
-    """Získání pokročilé analýzy"""
+def get_advanced_analysis(lat: float, lon: float, supplier_id: int | None):
+    """Získání pokročilé analýzy pro zadanou lokaci / dodavatele"""
     try:
-        # Simulace záplav
-        flood_response = requests.get(f"{BACKEND_URL}/api/analysis/river-flood-simulation", timeout=10)
-        flood_data = flood_response.json() if flood_response.status_code == 200 else None
-        
-        # Geografická analýza
-        geo_response = requests.get(f"{BACKEND_URL}/api/analysis/geographic-risk-assessment", timeout=10)
-        geo_data = geo_response.json() if geo_response.status_code == 200 else None
-        
+        flood_data = None
+        geo_data = None
+        # Simulace záplav (preferujeme vybraného dodavatele)
+        if supplier_id:
+            resp = requests.get(
+                f"{BACKEND_URL}/api/analysis/river-flood-simulation",
+                params={"supplier_id": supplier_id, "flood_level_m": 2.0},
+                timeout=25,
+            )
+            if resp.status_code == 200:
+                flood_data = resp.json()
+        else:
+            # Bez dodavatele provedeme lehčí geografickou analýzu pouze podle souřadnic
+            resp = requests.get(
+                f"{BACKEND_URL}/api/analysis/geographic-risk-assessment",
+                params={"lat": lat, "lon": lon, "radius_km": 50},
+                timeout=25,
+            )
+            if resp.status_code == 200:
+                geo_data = resp.json()
         return flood_data, geo_data
-    except Exception as e:
-        st.sidebar.error(f"❌ Chyba při pokročilé analýze: {str(e)}")
+    except Exception:
         return None, None
 
 def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
@@ -116,13 +172,15 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
         overlay=False
     ).add_to(m)
     
-    # Přidání dodavatelů (modré značky)
+    # Přidání dodavatelů (modré značky) s clusteringem
     supplier_group = folium.FeatureGroup(name="🏭 Dodavatelé", show=True)
+    supplier_cluster = MarkerCluster(name="🏭 Dodavatelé - cluster", show=True)
     
     for supplier in suppliers:
-        if supplier.get('latitude') and supplier.get('longitude') and is_in_czech_republic(supplier['latitude'], supplier['longitude']):
-            lat = supplier['latitude']
-            lon = supplier['longitude']
+        if supplier.get('latitude') and supplier.get('longitude'):
+            lat, lon = sanitize_coords(supplier['latitude'], supplier['longitude'])
+            if not is_in_czech_republic(lat, lon):
+                continue
             
             # Barva podle úrovně rizika
             risk_colors = {'low': 'green', 'medium': 'orange', 'high': 'red', 'critical': 'darkred'}
@@ -133,7 +191,8 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
                 <h4>🏭 {supplier['name']}</h4>
                 <p><strong>Kategorie:</strong> {supplier.get('category', 'Neznámé')}</p>
                 <p><strong>Úroveň rizika:</strong> {supplier.get('risk_level', 'Neznámé')}</p>
-                <p><strong>Přidáno:</strong> {supplier.get('created_at', 'Neznámé')}</p>
+                <p><strong>Přidáno:</strong> {format_dt(supplier.get('created_at', 'Neznámé'))}</p>
+                <p><strong>Souřadnice:</strong> {lat:.4f}, {lon:.4f}</p>
             </div>
             """
             
@@ -142,21 +201,24 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
                 popup=folium.Popup(popup_content, max_width=300),
                 icon=folium.Icon(color=color, icon='industry', prefix='fa'),
                 tooltip=f"🏭 {supplier['name']} ({supplier.get('risk_level', 'N/A')})"
-            ).add_to(supplier_group)
+            ).add_to(supplier_cluster)
     
+    supplier_cluster.add_to(supplier_group)
     supplier_group.add_to(m)
     
-    # Přidání rizikových událostí (červené značky)
+    # Přidání rizikových událostí (červené značky) s clusteringem
     event_group = folium.FeatureGroup(name="⚠️ Rizikové události", show=True)
+    event_cluster = MarkerCluster(name="⚠️ Události - cluster", show=True)
     
     for event in events:
-        if event.get('latitude') and event.get('longitude') and is_in_czech_republic(event['latitude'], event['longitude']):
-            lat = event['latitude']
-            lon = event['longitude']
+        if event.get('latitude') and event.get('longitude'):
+            lat, lon = sanitize_coords(event['latitude'], event['longitude'])
+            if not is_in_czech_republic(lat, lon):
+                continue
             
             # Barva podle závažnosti
-            severity_colors = {'low': 'lightred', 'medium': 'red', 'high': 'darkred', 'critical': 'black'}
-            color = severity_colors.get(event.get('severity', 'medium'), 'red')
+            severity_colors = {'low': 'green', 'medium': 'orange', 'high': 'red', 'critical': 'darkred'}
+            color = severity_colors.get(event.get('severity', 'medium'), 'orange')
             
             # Vylepšený popup s odkazem na zdroj
             source_link = ""
@@ -166,10 +228,12 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
             popup_content = f"""
             <div style='width: 250px;'>
                 <h4>⚠️ {event['title']}</h4>
-                <p><strong>Typ:</strong> {event.get('event_type', 'Neznámé')}</p>
-                <p><strong>Závažnost:</strong> {event.get('severity', 'Neznámé')}</p>
-                <p><strong>Datum:</strong> {event.get('created_at', 'Neznámé')}</p>
+                <p><strong>Typ:</strong> {EVENT_TYPE_LABEL.get(event.get('event_type'), event.get('event_type','Neznámé'))}</p>
+                <p><strong>Závažnost:</strong> {SEVERITY_LABEL.get(event.get('severity'), event.get('severity','Neznámé'))}</p>
+                <p><strong>Datum:</strong> {format_dt(event.get('created_at', 'Neznámé'))}</p>
                 <p><strong>Popis:</strong> {event.get('description', 'Bez popisu')}</p>
+                <p><strong>Zdroj dat:</strong> {SOURCE_LABEL.get(event.get('source'), event.get('source','Neznámé'))}</p>
+                <p><strong>Souřadnice:</strong> {lat:.4f}, {lon:.4f}</p>
                 {source_link}
             </div>
             """
@@ -179,8 +243,9 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
                 popup=folium.Popup(popup_content, max_width=300),
                 icon=folium.Icon(color=color, icon='exclamation-triangle', prefix='fa'),
                 tooltip=f"⚠️ {event['title'][:30]}..."
-            ).add_to(event_group)
+            ).add_to(event_cluster)
     
+    event_cluster.add_to(event_group)
     event_group.add_to(m)
     
     # Přidání legendy
@@ -204,6 +269,23 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
     # Přidání ovládání vrstev
     folium.LayerControl().add_to(m)
     
+    # Pokus o přizpůsobení výřezu mapy na zobrazené objekty
+    try:
+        bounds = []
+        for e in events:
+            if e.get('latitude') and e.get('longitude'):
+                lat, lon = sanitize_coords(e['latitude'], e['longitude'])
+                if is_in_czech_republic(lat, lon):
+                    bounds.append([lat, lon])
+        for s in suppliers:
+            if s.get('latitude') and s.get('longitude'):
+                lat, lon = sanitize_coords(s['latitude'], s['longitude'])
+                if is_in_czech_republic(lat, lon):
+                    bounds.append([lat, lon])
+        if bounds:
+            m.fit_bounds(bounds, padding=(20, 20))
+    except Exception:
+        pass
     return m
 
 def get_consistent_statistics(events, suppliers):
@@ -242,20 +324,38 @@ def main():
     
     # Filtry
     st.sidebar.subheader("🔍 Filtry")
+    show_only_cz = st.sidebar.toggle("Filtrovat pouze na ČR", value=False)
     
     # Typ události
     event_types = ["Všechny", "flood", "supply_chain"]
-    selected_event_type = st.sidebar.selectbox("📊 Typ události:", event_types)
+    selected_event_type_label = st.sidebar.selectbox(
+        "📊 Typ události:", ["Všechny", "Povodně", "Dodavatelský řetězec"]
+    )
+    selected_event_type = {
+        "Všechny": "Všechny",
+        "Povodně": "flood",
+        "Dodavatelský řetězec": "supply_chain",
+    }[selected_event_type_label]
     
     # Závažnost
-    severity_levels = ["Všechny", "low", "medium", "high", "critical"]
-    selected_severity = st.sidebar.selectbox("⚠️ Závažnost:", severity_levels)
+    severity_levels = ["Všechny", "Nízká", "Střední", "Vysoká", "Kritická"]
+    selected_severity_label = st.sidebar.selectbox("⚠️ Závažnost:", severity_levels)
+    severity_reverse = {
+        "Všechny": "Všechny",
+        "Nízká": "low",
+        "Střední": "medium",
+        "Vysoká": "high",
+        "Kritická": "critical",
+    }
+    selected_severity = severity_reverse[selected_severity_label]
     
     # Načtení dat
     events = get_risk_events()
     suppliers = get_suppliers()
+    # Rychlé info do sidebaru pro diagnostiku
+    st.sidebar.caption(f"Načteno z API: události={len(events)}, dodavatelé={len(suppliers)}")
     
-    # Filtrování dat
+    # Filtrování dat (typ/závažnost)
     filtered_events = events
     if selected_event_type != "Všechny":
         filtered_events = [e for e in events if e.get('event_type') == selected_event_type]
@@ -263,12 +363,15 @@ def main():
     if selected_severity != "Všechny":
         filtered_events = [e for e in filtered_events if e.get('severity') == selected_severity]
     
-    # Filtrování pouze pro ČR
-    czech_events = [e for e in filtered_events if e.get('latitude') and e.get('longitude') and 
-                    is_in_czech_republic(e['latitude'], e['longitude'])]
-    
-    czech_suppliers = [s for s in suppliers if s.get('latitude') and s.get('longitude') and 
-                       is_in_czech_republic(s['latitude'], s['longitude'])]
+    # Volitelné filtrování pouze pro ČR (default: vypnuto => zobrazíme vše)
+    if show_only_cz:
+        display_events = [e for e in filtered_events if e.get('latitude') and e.get('longitude') and 
+                          is_in_czech_republic(e['latitude'], e['longitude'])]
+        display_suppliers = [s for s in suppliers if s.get('latitude') and s.get('longitude') and 
+                             is_in_czech_republic(s['latitude'], s['longitude'])]
+    else:
+        display_events = filtered_events
+        display_suppliers = suppliers
     
     # Tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["🗺️ Mapa rizik", "📰 Scraping", "🏭 Dodavatelé", "🔬 Pokročilá analýza", "ℹ️ O aplikaci"])
@@ -277,23 +380,24 @@ def main():
     with tab1:
         st.header("🗺️ Mapa rizik")
         
-        # Statistiky
-        stats = get_consistent_statistics(czech_events, czech_suppliers)
+        # Statistiky vzhledem k zobrazeným datům
+        stats = get_consistent_statistics(display_events if show_only_cz else display_events, 
+                                          display_suppliers if show_only_cz else display_suppliers)
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("📊 Události v ČR", stats['czech_events'])
+            st.metric("📊 Události (zobrazené)", len(display_events))
         with col2:
-            st.metric("🏭 Dodavatelé v ČR", stats['czech_suppliers'])
+            st.metric("🏭 Dodavatelé (zobrazení)", len(display_suppliers))
         with col3:
             st.metric("⚠️ Vysoké riziko", f"{stats['high_risk_suppliers']} ({stats['high_risk_percentage']:.1f}%)")
         with col4:
-            st.metric("🌍 Celkem bodů na mapě", len(czech_events) + len(czech_suppliers))
-            st.info(f"📊 Zobrazeno: {len(czech_events)} událostí + {len(czech_suppliers)} dodavatelů")
+            st.metric("🌍 Celkem bodů na mapě", len(display_events) + len(display_suppliers))
+            st.info(f"📊 Zobrazeno: {len(display_events)} událostí + {len(display_suppliers)} dodavatelů")
         
         # Mapa
-        if czech_events or czech_suppliers:
-            risk_map = create_risk_map(czech_events, czech_suppliers)
+        if display_events or display_suppliers:
+            risk_map = create_risk_map(display_events, display_suppliers)
             folium_static(risk_map, width=1200, height=600)
         else:
             st.info("📝 Na mapě nejsou zobrazena žádná data v České republice.")
@@ -363,18 +467,18 @@ def main():
                 st.error(f"❌ Chyba: {str(e)}")
         
         # Zobrazení nejnovějších událostí
-        if czech_events:
+        if display_events:
             st.subheader("📋 Nejnovější události")
             
             # Vytvoření DataFrame
             events_data = []
-            for event in czech_events[:10]:  # Pouze posledních 10
+            for event in display_events[:10]:  # Pouze posledních 10
                 events_data.append({
                     'Název': event.get('title', 'Bez názvu'),
-                    'Typ': event.get('event_type', 'Neznámé'),
-                    'Závažnost': event.get('severity', 'Neznámé'),
-                    'Zdroj': event.get('source', 'Neznámé'),
-                    'Datum': event.get('created_at', 'Neznámé')
+                    'Typ': EVENT_TYPE_LABEL.get(event.get('event_type'), event.get('event_type','Neznámé')),
+                    'Závažnost': SEVERITY_LABEL.get(event.get('severity'), event.get('severity','Neznámé')),
+                    'Zdroj': SOURCE_LABEL.get(event.get('source'), event.get('source','Neznámé')),
+                    'Datum': format_dt(event.get('created_at', 'Neznámé'))
                 })
             
             if events_data:
@@ -389,26 +493,28 @@ def main():
     with tab3:
         st.header("🏭 Dodavatelé")
         
-        if czech_suppliers:
+        if display_suppliers:
             # Klíčové metriky
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("🏭 Celkem dodavatelů", stats['czech_suppliers'])
+                st.metric("🏭 Zobrazení dodavatelé", len(display_suppliers))
             with col2:
                 st.metric("⚠️ Vysoké riziko", f"{stats['high_risk_suppliers']} ({stats['high_risk_percentage']:.1f}%)")
             with col3:
-                st.metric("🇨🇿 V ČR", stats['czech_suppliers'])
+                st.metric("🇨🇿 Filtrování ČR", "Zapnuto" if show_only_cz else "Vypnuto")
             
             # Tabulka dodavatelů
             st.subheader("📋 Seznam dodavatelů")
             
             suppliers_data = []
-            for supplier in czech_suppliers:
+            for supplier in display_suppliers:
                 suppliers_data.append({
                     'Název dodavatele': supplier.get('name', 'Bez názvu'),
                     'Kategorie': supplier.get('category', 'Neznámé'),
                     'Úroveň rizika': supplier.get('risk_level', 'Neznámé'),
-                    'Datum přidání': supplier.get('created_at', 'Neznámé')
+                    'Latitude': supplier.get('latitude'),
+                    'Longitude': supplier.get('longitude'),
+                    'Datum přidání': format_dt(supplier.get('created_at', 'Neznámé'))
                 })
             
             if suppliers_data:
@@ -417,7 +523,25 @@ def main():
             else:
                 st.info("📝 Žádní dodavatelé k zobrazení.")
         else:
-            st.info("📝 Žádní dodavatelé k zobrazení.")
+            # Debug: pokud API vrátilo nějaké dodavatele, ale žádný neprošel CZ filtrem, nabídneme zobrazení všech
+            if suppliers:
+                st.warning("⚠️ Žádní dodavatelé v rámci hranic ČR po aplikaci filtru.")
+                if st.toggle("Zobrazit dodavatele bez filtru ČR"):
+                    suppliers_data = []
+                    for supplier in suppliers:
+                        suppliers_data.append({
+                            'Název dodavatele': supplier.get('name', 'Bez názvu'),
+                            'Kategorie': supplier.get('category', 'Neznámé'),
+                            'Úroveň rizika': supplier.get('risk_level', 'Neznámé'),
+                            'Latitude': supplier.get('latitude'),
+                            'Longitude': supplier.get('longitude'),
+                            'Datum přidání': format_dt(supplier.get('created_at', 'Neznámé'))
+                        })
+                    if suppliers_data:
+                        df_suppliers = pd.DataFrame(suppliers_data)
+                        st.dataframe(df_suppliers, use_container_width=True)
+            else:
+                st.info("📝 Žádní dodavatelé k zobrazení.")
     
     # Tab 4: Pokročilá analýza
     with tab4:
@@ -430,47 +554,86 @@ def main():
         🗺️ **Geografická analýza:** Komplexní posouzení rizik pro libovolnou lokaci
         """)
         
-        # Získání dat pro pokročilou analýzu
-        flood_data, geo_data = get_advanced_analysis()
+        # Ovládání pro analýzu: volba dodavatele / souřadnic
+        st.subheader("🎯 Parametry analýzy")
+        colp1, colp2 = st.columns(2)
+        with colp1:
+            supplier_names = [s.get('name') for s in suppliers]
+            selected_supplier = st.selectbox("Vyberte dodavatele (volitelné)", ["— žádný —"] + supplier_names)
+            supplier_id = None
+            if selected_supplier != "— žádný —":
+                for s in suppliers:
+                    if s.get('name') == selected_supplier:
+                        supplier_id = s.get('id')
+                        lat_default, lon_default = s.get('latitude'), s.get('longitude')
+                        break
+            else:
+                lat_default, lon_default = 50.0755, 14.4378  # Praha
+        with colp2:
+            lat = st.number_input("Latitude", value=float(lat_default), format="%.6f")
+            lon = st.number_input("Longitude", value=float(lon_default), format="%.6f")
+
+        run_analysis = st.button("🔬 Spustit analýzu", type="primary")
+        flood_data = geo_data = None
+        if run_analysis:
+            flood_data, geo_data = get_advanced_analysis(lat, lon, supplier_id)
         
         # Simulace záplav
         st.subheader("🌊 Simulace záplav")
-        
+
         if flood_data and flood_data.get('flood_analysis'):
-            # Zobrazení top 3 výsledků
+            # Hromadná analýza (seznam)
             st.markdown("**📊 Top 3 nejohroženější dodavatelé:**")
-            
-            for i, analysis in enumerate(flood_data['flood_analysis'][:3], 1):
-                # Opravené získání názvu dodavatele
-                supplier_info = analysis.get('supplier', {})
-                supplier_name = supplier_info.get('name', 'Neznámý dodavatel') if supplier_info else 'Neznámý dodavatel'
-                
+            items = flood_data.get('flood_analysis') or []
+            for i, analysis in enumerate(items[:3], 1):
+                supplier_info = analysis.get('supplier', {}) or {}
+                supplier_name = supplier_info.get('name', 'Neznámý dodavatel')
                 with st.expander(f"#{i} {supplier_name}"):
                     col1, col2 = st.columns(2)
                     with col1:
-                        # Opravené získání dat o záplavách
-                        flood_risk = analysis.get('flood_risk', {})
+                        flood_risk = analysis.get('flood_risk', {}) or {}
                         probability = flood_risk.get('probability', 0)
                         nearest_river = flood_risk.get('nearest_river_name', 'Neznámá')
                         river_distance = flood_risk.get('river_distance_km', 0)
                         impact_level = flood_risk.get('impact_level', 'Neznámé')
-                        
-                        st.metric("Pravděpodobnost záplav", f"{probability:.1%}")
+                        st.metric("Pravděpodobnost záplav", f"{probability:.0%}")
                         st.metric("Nejbližší řeka", nearest_river)
                     with col2:
                         st.metric("Vzdálenost od řeky", f"{river_distance:.1f} km")
                         st.metric("Úroveň rizika", impact_level)
+        elif flood_data and flood_data.get('supplier'):
+            # Detail pro jednoho dodavatele
+            supplier_info = flood_data.get('supplier') or {}
+            supplier_name = supplier_info.get('name', 'Neznámý dodavatel')
+            flood_risk = flood_data.get('flood_simulation', {}) or {}
+            st.markdown(f"**📌 {supplier_name}**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Pravděpodobnost záplav", f"{flood_risk.get('probability', 0):.0%}")
+                st.metric("Nejbližší řeka", flood_risk.get('nearest_river_name', 'Neznámá'))
+            with col2:
+                st.metric("Vzdálenost od řeky", f"{flood_risk.get('river_distance_km', 0):.1f} km")
+                st.metric("Úroveň rizika", flood_risk.get('impact_level', 'Neznámé'))
         else:
-            st.warning("⚠️ Data pro simulaci záplav nejsou dostupná.")
+            st.info("ℹ️ Pro simulaci zvolte konkrétního dodavatele nebo zkuste analyzovat podle souřadnic v sekci Geografická analýza.")
         
         # Geografická analýza
         st.subheader("🗺️ Geografická analýza")
         
-        if geo_data and geo_data.get('combined_risk_assessment'):
-            # Zobrazení top 3 výsledků
-            st.markdown("**📊 Top 3 nejrizikovější lokace:**")
-            
-            for i, analysis in enumerate(geo_data['combined_risk_assessment'][:3], 1):
+        if geo_data and geo_data.get('combined_risk_assessment') is not None:
+            # Umožníme jak list, tak dict
+            assess = geo_data.get('combined_risk_assessment')
+            items = []
+            if isinstance(assess, list):
+                items = assess[:3]
+            elif isinstance(assess, dict):
+                # pokud má klíč 'items'
+                if isinstance(assess.get('items'), list):
+                    items = assess['items'][:3]
+                else:
+                    items = [assess]
+            st.markdown("**📊 Top výsledky geografické analýzy:**")
+            for i, analysis in enumerate(items, 1):
                 risk_score = analysis.get('risk_score', 0)
                 with st.expander(f"#{i} Risk Score: {risk_score:.1f}%"):
                     col1, col2 = st.columns(2)
@@ -480,10 +643,9 @@ def main():
                     with col2:
                         st.metric("Nadmořská výška", f"{analysis.get('elevation_m', 0):.0f} m")
                         st.metric("Historické události", analysis.get('historical_events', 0))
-                    
                     st.info(f"💡 **Doporučení:** {analysis.get('recommendation', 'Neznámé')}")
         else:
-            st.warning("⚠️ Data pro geografickou analýzu nejsou dostupná.")
+            st.info("ℹ️ Zadejte souřadnice (lat/lon) a spusťte analýzu pro zobrazení výsledků.")
     
     # Tab 5: O aplikaci
     with tab5:
@@ -520,7 +682,7 @@ def main():
         • **Frontend:** Streamlit (Python)
         • **Backend:** FastAPI (Python)
         • **Databáze:** PostgreSQL s PostGIS
-        • **Deployment:** Render.com
+        • **Deployment:** Render.com (backend) + Streamlit Cloud (frontend)
         • **Mapy:** Folium (OpenStreetMap, Satelitní)
         
         ### 📈 Vývoj
@@ -529,7 +691,7 @@ def main():
         """)
         
         st.markdown("---")
-        st.markdown("© 2025 Risk Analyst Dashboard")
+        st.markdown("© 2025 Risk Analyst Dashboard · Backend: risk-analyst.onrender.com · Frontend: aktuální stránka")
 
 if __name__ == "__main__":
     main() 
