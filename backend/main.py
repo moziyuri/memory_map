@@ -1541,24 +1541,62 @@ def parse_rss_feed(rss_xml: str, feed_url: str) -> List[Dict]:
         return []
 
 def analyze_rss_item_for_risk(title: str, description: str, feed_url: str) -> Dict:
-    """Analyzuje RSS položku a hledá rizikové události"""
-    
-    # Klíčová slova pro různé typy rizik
-    risk_keywords = {
-        'protest': ['protest', 'demonstrace', 'stávka', 'manifestace', 'nepokoje'],
-        'supply_chain': ['doprava', 'dálnice', 'silnice', 'uzavírka', 'nehoda', 'havárie', 'blokáda'],
-        'geopolitical': ['politika', 'vláda', 'parlament', 'napětí', 'konflikt', 'diplomacie'],
-        'flood': ['záplavy', 'povodně', 'deště', 'voda', 'vltava', 'morava', 'řeka']
-    }
+    """Analyzuje RSS položku a hledá rizikové události s lepší klasifikací"""
     
     # Kombinujeme title a description pro analýzu
     text = f"{title} {description}".lower()
     
-    # Hledáme klíčová slova
+    # Filtry pro vyloučení nepodstatných zpráv
+    exclude_keywords = [
+        'film', 'kino', 'divadlo', 'koncert', 'festival', 'výstava', 'kniha', 'album',
+        'sport', 'fotbal', 'hokej', 'tenis', 'basketball', 'atletika',
+        'kultura', 'umění', 'literatura', 'hudba', 'televize', 'rozhlas',
+        'reklama', 'marketing', 'obchod', 'nákup', 'sleva', 'akce',
+        'výpověď', 'život', 'osobní', 'soukromý', 'rodina', 'dítě'
+    ]
+    
+    # Kontrola vylučovacích klíčových slov
+    for exclude_word in exclude_keywords:
+        if exclude_word in text:
+            return None  # Nejedná se o rizikovou událost
+    
+    # Specifická klíčová slova pro rizikové události (priorita řek a počasí)
+    risk_keywords = {
+        'flood': [
+            'záplavy', 'povodně', 'deště', 'voda', 'vltava', 'morava', 'labe', 'ohře', 'berounka',
+            'řeka', 'přetečení', 'vylití', 'zaplavení', 'povodňová', 'meteorologická', 'chmi',
+            'extrémní počasí', 'bouřka', 'přívalový déšť', 'srážky', 'vodní hladina'
+        ],
+        'supply_chain': [
+            'doprava', 'dálnice', 'silnice', 'uzavírka', 'nehoda', 'havárie', 'blokáda',
+            'dodavatelský řetězec', 'logistika', 'nákladní doprava', 'přeprava',
+            'dodávky', 'zásobování', 'výroba', 'továrna', 'sklad', 'distribuce'
+        ],
+        'protest': [
+            'protest', 'demonstrace', 'stávka', 'manifestace', 'nepokoje', 'blokáda',
+            'odborový svaz', 'výpověď práce', 'stávkující', 'protestující'
+        ],
+        'geopolitical': [
+            'politika', 'vláda', 'parlament', 'napětí', 'konflikt', 'diplomacie',
+            'mezinárodní', 'bezpečnost', 'krize', 'napětí', 'spor'
+        ]
+    }
+    
+    # Hledáme klíčová slova s prioritou řek a počasí
     for event_type, keywords in risk_keywords.items():
         for keyword in keywords:
             if keyword in text:
-                return create_rss_event(title, description, event_type, keyword, feed_url)
+                # Dodatečná kontrola pro lepší kvalitu
+                if event_type == 'flood':
+                    # Pro záplavy vyžadujeme konkrétnější indikátory
+                    if any(word in text for word in ['záplavy', 'povodně', 'vltava', 'morava', 'labe', 'chmi', 'meteorologická']):
+                        return create_rss_event(title, description, event_type, keyword, feed_url)
+                elif event_type == 'supply_chain':
+                    # Pro dodavatelský řetězec vyžadujeme konkrétní dopravní problémy
+                    if any(word in text for word in ['doprava', 'dálnice', 'uzavírka', 'nehoda', 'havárie', 'dodavatelský']):
+                        return create_rss_event(title, description, event_type, keyword, feed_url)
+                else:
+                    return create_rss_event(title, description, event_type, keyword, feed_url)
     
     return None
 
@@ -1814,7 +1852,7 @@ async def supply_chain_impact_analysis(
                 
                 # Analýza rizikových událostí v okolí
                 cur.execute("""
-                    SELECT COUNT(*) as total_events,
+                    SELECT COUNT(*) as nearby_events,
                            COUNT(*) FILTER (WHERE severity IN ('high', 'critical')) as high_risk_events,
                            COUNT(*) FILTER (WHERE event_type = %s) as specific_type_events
                     FROM risk_events
@@ -1891,59 +1929,87 @@ async def supply_chain_impact_analysis(
 # ============================================================================
 
 def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
-    """Výpočet rizika záplav pro danou lokaci"""
-    # Simulace na základě nadmořské výšky a vzdálenosti od řek
-    base_elevation = 200  # Průměrná nadmořská výška ČR
-    river_distance = calculate_river_distance(lat, lon)
-    
-    # Výpočet pravděpodobnosti záplav
-    if river_distance < 1.0:  # Méně než 1km od řeky
-        probability = 0.8
-        impact_level = "critical"
-    elif river_distance < 5.0:  # 1-5km od řeky
-        probability = 0.6
-        impact_level = "high"
-    elif river_distance < 10.0:  # 5-10km od řeky
-        probability = 0.3
-        impact_level = "medium"
-    else:
-        probability = 0.1
-        impact_level = "low"
-    
-    # Úprava podle nadmořské výšky
-    if base_elevation < 150:
-        probability *= 1.5
-    elif base_elevation > 400:
-        probability *= 0.5
-    
-    return {
-        "probability": min(probability, 1.0),
-        "impact_level": impact_level,
-        "river_distance_km": river_distance,
-        "elevation_m": base_elevation,
-        "flood_level_m": flood_level_m,
-        "mitigation_needed": probability > 0.5
-    }
+    """Výpočet rizika záplav na základě polygonů řek a nadmořské výšky"""
+    try:
+        conn = get_risk_db()
+        cur = conn.cursor()
+        
+        # Použití databázové funkce pro analýzu rizika záplav z polygonů řek
+        cur.execute("SELECT analyze_flood_risk_from_rivers(%s, %s)", (lat, lon))
+        result = cur.fetchone()
+        
+        if result and result[0]:
+            flood_analysis = result[0]
+            elevation_analysis = analyze_elevation_profile(lat, lon)
+            
+            # Kombinace analýzy řek a nadmořské výšky
+            elevation_factor = 1.0
+            if elevation_analysis['elevation_m'] < 200:
+                elevation_factor = 1.3  # Zvýšené riziko v nížinách
+            elif elevation_analysis['elevation_m'] > 400:
+                elevation_factor = 0.7  # Snížené riziko v horách
+            
+            # Úprava pravděpodobnosti podle nadmořské výšky
+            adjusted_probability = min(0.95, flood_analysis['flood_probability'] * elevation_factor)
+            
+            return {
+                "probability": adjusted_probability,
+                "river_distance_km": flood_analysis['nearest_river_distance_km'],
+                "nearest_river_name": flood_analysis['nearest_river_name'],
+                "elevation_m": elevation_analysis['elevation_m'],
+                "impact_level": flood_analysis['flood_risk_level'],
+                "mitigation_needed": flood_analysis['mitigation_needed']
+            }
+        else:
+            # Fallback pokud není k dispozici analýza řek
+            river_distance = calculate_river_distance(lat, lon)
+            elevation_analysis = analyze_elevation_profile(lat, lon)
+            
+            base_probability = 0.1 if river_distance > 10.0 else 0.4
+            return {
+                "probability": base_probability,
+                "river_distance_km": river_distance,
+                "nearest_river_name": "Neznámá řeka",
+                "elevation_m": elevation_analysis['elevation_m'],
+                "impact_level": "low",
+                "mitigation_needed": False
+            }
+            
+    except Exception as e:
+        print(f"Chyba při výpočtu rizika záplav: {e}")
+        return {
+            "probability": 0.1,
+            "river_distance_km": 999.0,
+            "nearest_river_name": "Chyba analýzy",
+            "elevation_m": 300.0,
+            "impact_level": "low",
+            "mitigation_needed": False
+        }
+    finally:
+        if conn:
+            conn.close()
 
 def calculate_river_distance(lat: float, lon: float) -> float:
-    """Výpočet vzdálenosti od nejbližší řeky (simulace)"""
-    # Hlavní řeky ČR s přibližnými souřadnicemi
-    rivers = [
-        {"name": "Vltava", "lat": 50.0755, "lon": 14.4378},
-        {"name": "Labe", "lat": 50.2092, "lon": 15.8327},
-        {"name": "Morava", "lat": 49.1951, "lon": 16.6068},
-        {"name": "Ohře", "lat": 50.231, "lon": 12.880},
-        {"name": "Berounka", "lat": 49.7475, "lon": 13.3776}
-    ]
-    
-    min_distance = float('inf')
-    for river in rivers:
-        distance = ((lat - river['lat'])**2 + (lon - river['lon'])**2)**0.5
-        # Převod na km (přibližně)
-        distance_km = distance * 111
-        min_distance = min(min_distance, distance_km)
-    
-    return min_distance
+    """Výpočet vzdálenosti od nejbližší řeky pomocí polygonů"""
+    try:
+        conn = get_risk_db()
+        cur = conn.cursor()
+        
+        # Použití databázové funkce pro výpočet vzdálenosti od polygonů řek
+        cur.execute("SELECT calculate_river_distance(%s, %s)", (lat, lon))
+        result = cur.fetchone()
+        
+        if result and result[0] is not None:
+            return float(result[0])
+        else:
+            return 999.0  # Velká vzdálenost pokud není nalezena řeka
+            
+    except Exception as e:
+        print(f"Chyba při výpočtu vzdálenosti od řeky: {e}")
+        return 999.0
+    finally:
+        if conn:
+            conn.close()
 
 def analyze_river_proximity(lat: float, lon: float, radius_km: int) -> dict:
     """Analýza blízkosti řek"""
@@ -2025,7 +2091,7 @@ def calculate_combined_risk(river_analysis: dict, elevation_analysis: dict, hist
 
 def simulate_supply_chain_impact(supplier: dict, risk_stats: dict, event_type: str) -> dict:
     """Simulace dopadu na dodavatelský řetězec"""
-    total_events = risk_stats['total_events'] or 0
+    nearby_events = risk_stats['nearby_events'] or 0
     critical_events = risk_stats['high_risk_events'] or 0
     
     # Výpočet rizika přerušení dodávek

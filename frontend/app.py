@@ -1,16 +1,13 @@
 """
 Risk Analyst Dashboard - Interaktivní mapa rizikových událostí
 
-Streamlit aplikace pro vizualizaci a analýzu rizikových událostí v dodavatelském řetězci.
-Součást projektu vytvořeného pro VW Group Risk Analyst pozici.
+Dashboard pro analýzu rizik v dodavatelském řetězci.
 
-Funkce:
-- Interaktivní mapa pro zobrazení rizikových událostí
-- Filtry podle typu události, závažnosti, zdroje
-- Zobrazení dodavatelů a jejich rizik
-- Analýza rizik v okolí dodavatelů
+⚠️ Události: Rizikové situace (záplavy, protesty, dodavatelské problémy)
+🏭 Dodavatelé: Dodavatelé s hodnocením rizika
+📊 Analýza: Vzájemné vztahy a dopady na dodavatelský řetězec
 
-Autor: Vytvořeno jako ukázka dovedností pro VW Group Risk Analyst pozici.
+Autor: Vytvořeno jako ukázka dovedností pro Risk Analyst pozici.
 """
 # Update: Risk Analyst Dashboard - 2025
 
@@ -141,7 +138,7 @@ def is_in_czech_republic(lat, lon):
 
 # Funkce pro získání konzistentních statistik
 def get_consistent_statistics(events, suppliers):
-    """Získání konzistentních statistik napříč celou aplikací"""
+    """Získání konzistentních statistik napříč celou aplikací - pouze položky zobrazené na mapě"""
     if not events:
         return {
             'total_events': 0,
@@ -153,7 +150,7 @@ def get_consistent_statistics(events, suppliers):
             'high_risk_suppliers': 0
         }
     
-    # Počítání událostí v ČR
+    # Počítání událostí v ČR (pouze ty, které se zobrazí na mapě)
     czech_events = 0
     high_critical_events = 0
     recent_events = 0
@@ -163,25 +160,29 @@ def get_consistent_statistics(events, suppliers):
             lat = float(event.get("latitude", 0))
             lon = float(event.get("longitude", 0))
             
+            # Kontrola, že souřadnice jsou v rozumném rozsahu a v ČR
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                continue
+                
             if is_in_czech_republic(lat, lon):
                 czech_events += 1
-            
-            if event.get("severity") in ["high", "critical"]:
-                high_critical_events += 1
-            
-            # Události z posledních 7 dní
-            created_at = event.get("created_at", "")
-            if created_at:
-                try:
-                    event_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                    if (datetime.now() - event_date).days <= 7:
-                        recent_events += 1
-                except:
-                    pass
+                
+                if event.get("severity") in ["high", "critical"]:
+                    high_critical_events += 1
+                
+                # Události z posledních 7 dní
+                created_at = event.get("created_at", "")
+                if created_at:
+                    try:
+                        event_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        if (datetime.now() - event_date).days <= 7:
+                            recent_events += 1
+                    except:
+                        pass
         except:
             pass
     
-    # Počítání dodavatelů
+    # Počítání dodavatelů v ČR (pouze ti, kteří se zobrazí na mapě)
     czech_suppliers = 0
     high_risk_suppliers = 0
     
@@ -191,20 +192,24 @@ def get_consistent_statistics(events, suppliers):
                 lat = float(supplier.get("latitude", 0))
                 lon = float(supplier.get("longitude", 0))
                 
+                # Kontrola, že souřadnice jsou v rozumném rozsahu a v ČR
+                if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                    continue
+                    
                 if is_in_czech_republic(lat, lon):
                     czech_suppliers += 1
-                
-                if supplier.get("risk_level") == "high":
-                    high_risk_suppliers += 1
+                    
+                    if supplier.get("risk_level") == "high":
+                        high_risk_suppliers += 1
             except:
                 pass
     
     return {
-        'total_events': len(events),
+        'total_events': czech_events,  # Pouze události zobrazené na mapě
         'czech_events': czech_events,
         'high_critical_events': high_critical_events,
         'recent_events': recent_events,
-        'total_suppliers': len(suppliers) if suppliers else 0,
+        'total_suppliers': czech_suppliers,  # Pouze dodavatelé zobrazení na mapě
         'czech_suppliers': czech_suppliers,
         'high_risk_suppliers': high_risk_suppliers
     }
@@ -331,9 +336,29 @@ def run_scraping():
         st.error(f"Chyba při komunikaci s API: {str(e)}")
         return None
 
+def get_advanced_analysis():
+    """Získání dat pro pokročilou analýzu"""
+    try:
+        # River flood simulation
+        response = requests.get(f"{BACKEND_URL}/api/analysis/river-flood-simulation")
+        if response.status_code == 200:
+            flood_data = response.json()
+        else:
+            flood_data = {"error": "Nepodařilo se načíst data o záplavách"}
+        
+        # Supply chain impact
+        response = requests.get(f"{BACKEND_URL}/api/analysis/supply-chain-impact")
+        if response.status_code == 200:
+            supply_chain_data = response.json()
+        else:
+            supply_chain_data = {"error": "Nepodařilo se načíst data o dodavatelském řetězci"}
+        return flood_data, supply_chain_data
+    except Exception as e:
+        return {"error": f"Chyba: {str(e)}"}, {"error": f"Chyba: {str(e)}"}
+
 # Helper funkce pro vytvoření mapy s rizikovými událostmi
-def create_risk_map(events, suppliers, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON, zoom_start=8):
-    """Vytvoření mapy s rizikovými událostmi a dodavateli - pouze v ČR"""
+def create_risk_map(events, suppliers, center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON, zoom_start=8, flood_data=None, geo_data=None):
+    """Vytvoření mapy s rizikovými událostmi, dodavateli a pokročilou analýzou - pouze v ČR"""
     m = folium.Map(
         location=[center_lat, center_lon], 
         zoom_start=zoom_start,  # Dynamický zoom podle dat
@@ -621,6 +646,142 @@ def create_risk_map(events, suppliers, center_lat=DEFAULT_LAT, center_lon=DEFAUL
     st.session_state.czech_suppliers = czech_suppliers
     st.session_state.total_suppliers = total_suppliers
     
+    # Přidání pokročilé analýzy na mapu
+    if flood_data and "flood_analysis" in flood_data:
+        for analysis in flood_data['flood_analysis']:
+            try:
+                supplier = analysis['supplier']
+                flood_risk = analysis['flood_risk']
+                
+                lat = float(supplier.get("latitude", 0))
+                lon = float(supplier.get("longitude", 0))
+                
+                # Kontrola, že souřadnice jsou v rozumném rozsahu a v ČR
+                if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                    continue
+                
+                if not is_in_czech_republic(lat, lon):
+                    continue
+                
+                # Popup pro simulaci záplav
+                flood_popup_content = f"""
+                <div style='width: 380px; padding: 15px; font-family: Arial, sans-serif;'>
+                    <h3 style='color: #D32F2F; margin-top: 0; border-bottom: 2px solid #D32F2F; padding-bottom: 5px;'>
+                        🌊 SIMULACE ZÁPLAV: {supplier['name']}
+                    </h3>
+                    
+                    <div style='background-color: #ffebee; padding: 10px; border-radius: 5px; margin: 10px 0; 
+                               border-left: 4px solid #D32F2F;'>
+                        <strong>📊 VÝSLEDKY SIMULACE:</strong><br>
+                        <strong>Pravděpodobnost záplav:</strong> {flood_risk['probability']:.1%}<br>
+                        <strong>Úroveň dopadu:</strong> {flood_risk['impact_level'].upper()}<br>
+                        <strong>Vzdálenost od řeky:</strong> {flood_risk['river_distance_km']:.1f} km<br>
+                        <strong>Nadmořská výška:</strong> {flood_risk['elevation_m']:.0f} m
+                    </div>
+                    
+                    <div style='background-color: #fff3e0; padding: 10px; border-radius: 5px; margin: 10px 0; 
+                               border-left: 4px solid #ff9800;'>
+                        <strong>⚠️ MITIGACE:</strong><br>
+                        {'Potřebná mitigace - doporučeno přemístění' if flood_risk['mitigation_needed'] else 'Bezpečná oblast - žádná akce nutná'}
+                    </div>
+                    
+                    <div style='background-color: #e8f5e8; padding: 8px; border-radius: 5px; margin-top: 10px; 
+                               border-left: 4px solid #4caf50;'>
+                        <strong>💡 DOPORUČENÍ:</strong><br>
+                        {'• Přesunout výrobu do bezpečnější lokace<br>• Instalovat protipovodňová opatření<br>• Vytvořit záložní dodavatelský řetězec' if flood_risk['mitigation_needed'] else '• Pokračovat v rutinním monitoringu<br>• Pravidelně kontrolovat stav lokace'}
+                    </div>
+                </div>
+                """
+                
+                # Přidání markeru pro simulaci záplav (červené ikony s vodou)
+                folium.Marker(
+                    [lat, lon],
+                    popup=folium.Popup(flood_popup_content, max_width=380),
+                    tooltip=f"🌊 ZÁPLAVY: {supplier['name']} ({flood_risk['impact_level']})",
+                    icon=folium.Icon(icon="tint", prefix="fa", color="red")
+                ).add_to(m)
+                
+                # Přidání kruhu pro rizikovou zónu (simulace)
+                risk_radius = 5 if flood_risk['mitigation_needed'] else 2  # km
+                folium.Circle(
+                    radius=risk_radius * 1000,  # Převod na metry
+                    location=[lat, lon],
+                    popup=f'Riziková zóna záplav: {risk_radius} km',
+                    color='red' if flood_risk['mitigation_needed'] else 'green',
+                    fill=True,
+                    fillOpacity=0.2,
+                    weight=2
+                ).add_to(m)
+                
+            except Exception as e:
+                print(f"Chyba při zpracování simulace záplav: {str(e)}")
+    
+    # Přidání geografické analýzy na mapu
+    if geo_data and "combined_risk_assessment" in geo_data:
+        try:
+            # Získání dat z geografické analýzy
+            risk_assessment = geo_data['combined_risk_assessment']
+            river_analysis = geo_data['river_analysis']
+            elevation_analysis = geo_data['elevation_analysis']
+            
+            # Použijeme střední souřadnice ČR pro zobrazení analýzy
+            analysis_lat = 50.0755
+            analysis_lon = 14.4378
+            
+            # Popup pro geografickou analýzu
+            geo_popup_content = f"""
+            <div style='width: 380px; padding: 15px; font-family: Arial, sans-serif;'>
+                <h3 style='color: #1976D2; margin-top: 0; border-bottom: 2px solid #1976D2; padding-bottom: 5px;'>
+                    🗺️ GEOGRAFICKÁ ANALÝZA RIZIK
+                </h3>
+                
+                <div style='background-color: #e3f2fd; padding: 10px; border-radius: 5px; margin: 10px 0; 
+                           border-left: 4px solid #1976D2;'>
+                    <strong>📊 CELKOVÉ HODNOCENÍ:</strong><br>
+                    <strong>Celkové riziko:</strong> {risk_assessment['overall_risk_level'].upper()}<br>
+                    <strong>Risk score:</strong> {risk_assessment['risk_score']}/100
+                </div>
+                
+                <div style='background-color: #fff3e0; padding: 10px; border-radius: 5px; margin: 10px 0; 
+                           border-left: 4px solid #ff9800;'>
+                    <strong>🌊 ANALÝZA ŘEK:</strong><br>
+                    <strong>Vzdálenost od řeky:</strong> {river_analysis['nearest_river_distance_km']:.1f} km<br>
+                    <strong>Záplavová zóna:</strong> {'Ano' if river_analysis['flood_risk_zone'] else 'Ne'}
+                </div>
+                
+                <div style='background-color: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0; 
+                           border-left: 4px solid #4caf50;'>
+                    <strong>🏔️ ANALÝZA TERÉNU:</strong><br>
+                    <strong>Nadmořská výška:</strong> {elevation_analysis['elevation_m']:.0f} m<br>
+                    <strong>Typ terénu:</strong> {elevation_analysis['terrain_type']}
+                </div>
+                
+                <div style='background-color: #f3e5f5; padding: 8px; border-radius: 5px; margin-top: 10px; 
+                           border-left: 4px solid #9c27b0;'>
+                    <strong>💡 DOPORUČENÍ:</strong><br>
+                    {chr(10).join([f"• {rec}" for rec in risk_assessment['recommendations'][:3]])}
+                </div>
+            </div>
+            """
+            
+            # Barva podle úrovně rizika
+            risk_color = {
+                'high': 'red',
+                'medium': 'orange', 
+                'low': 'green'
+            }.get(risk_assessment['overall_risk_level'].lower(), 'gray')
+            
+            # Přidání markeru pro geografickou analýzu
+            folium.Marker(
+                [analysis_lat, analysis_lon],
+                popup=folium.Popup(geo_popup_content, max_width=380),
+                tooltip=f"🗺️ GEOGRAFICKÁ ANALÝZA: {risk_assessment['overall_risk_level'].upper()}",
+                icon=folium.Icon(icon="map-marker", prefix="fa", color=risk_color)
+            ).add_to(m)
+            
+        except Exception as e:
+            print(f"Chyba při zpracování geografické analýzy: {str(e)}")
+    
     return m
 
 # Funkce pro filtrování událostí
@@ -705,20 +866,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Vysvětlení aplikace
-    st.markdown("""
-    <div style='background-color: #E8F5E8; padding: 15px; border-radius: 10px; border-left: 4px solid #4CAF50;'>
-        <h4 style='color: #2E7D32; margin-top: 0;'>🎯 Účel aplikace</h4>
-        <p style='margin: 5px 0; font-size: 0.9em;'>
-            Dashboard pro analýzu rizik v dodavatelském řetězci.
-        </p>
-        <p style='margin: 5px 0; font-size: 0.9em;'>
-            <strong>⚠️ Události:</strong> Rizikové situace (záplavy, protesty, dodavatelské problémy)<br>
-            <strong>🏭 Dodavatelé:</strong> Dodavatelé s hodnocením rizika<br>
-            <strong>📊 Analýza:</strong> Vzájemné vztahy a dopady na dodavatelský řetězec
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Účel aplikace přesunut do sekce "O aplikaci"
     
     # Vysvětlení hodnocení rizik
     st.markdown("""
@@ -733,19 +881,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Vysvětlení zdrojů dat - zjednodušené
-    st.markdown("""
-    <div style='background-color: #FFF3E0; padding: 15px; border-radius: 10px; border-left: 4px solid #FF9800; margin-top: 15px;'>
-        <h4 style='color: #F57C00; margin-top: 0;'>🔗 Zdroje dat</h4>
-        <p style='margin: 5px 0; font-size: 0.9em;'>
-            <strong>🌤️ CHMI:</strong> Meteorologická data a výstrahy<br>
-            <strong>📰 RSS:</strong> Zprávy z českých médií<br>
-            <strong>✋ Ruční:</strong> Manuálně přidané události<br>
-            <strong>📊 V mapě:</strong> Červené ikony = rizikové události, modré ikony = dodavatelé<br>
-            <strong>💡 Tip:</strong> Spusťte scraping pro získání aktuálních dat
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Zdroje dat přesunuty do sekce "O aplikaci"
     
     # Kontrola připojení k API
     st.subheader("🔌 Stav připojení")
@@ -820,17 +956,7 @@ with st.sidebar:
         selected_severity = st.selectbox("⚠️ Závažnost:", severities, help="Vyberte úroveň závažnosti")
         selected_source = st.selectbox("🔗 Zdroj dat:", sources, help="Vyberte zdroj dat")
         
-        # Vysvětlení filtrů
-        st.markdown("""
-        <div style='background-color: #F0F8FF; padding: 10px; border-radius: 8px; margin: 10px 0;'>
-            <h5 style='color: #1E90FF; margin-top: 0;'>💡 Vysvětlení filtrů</h5>
-            <p style='margin: 3px 0; font-size: 0.8em;'>
-                <strong>📊 Typ události:</strong> Záplavy, protesty, dodavatelské problémy, geopolitické události<br>
-                <strong>⚠️ Závažnost:</strong> Kritické (okamžitý dopad) až Nízké (minimální riziko)<br>
-                <strong>🔗 Zdroj dat:</strong> CHMI API (počasí), RSS feeds (zprávy), ručně přidané
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        # Filtry bez duplicitního vysvětlení
         
         # Datové filtry
         st.markdown("""
@@ -847,51 +973,6 @@ with st.sidebar:
             date_from = st.date_input("Od:", value=datetime.now().date() - timedelta(days=7), help="Začátek časového období")
         with col2:
             date_to = st.date_input("Do:", value=datetime.now().date(), help="Konec časového období")
-        
-        # Tlačítko pro spuštění scraping
-        st.subheader("🔄 Aktualizace dat")
-        if st.button("🔄 Spustit scraping", type="primary", help="Spustí web scraping pro získání aktuálních dat"):
-            with st.spinner("Spouštím scraping..."):
-                result = run_scraping()
-                if result and isinstance(result, dict):
-                    # Uživatelsky přívětivé zobrazení výsledků
-                    st.success("✅ Scraping dokončen!")
-                    
-                    # Zobrazení přehledných výsledků
-                    if 'results' in result:
-                        results = result['results']
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            if 'chmi' in results:
-                                chmi_data = results['chmi']
-                                if chmi_data.get('status') == 'success':
-                                    st.info(f"🌤️ CHMI (počasí): {chmi_data.get('scraped_count', 0)} nových událostí")
-                                else:
-                                    st.warning("🌤️ CHMI: Žádná nová data")
-                            
-                            if 'rss' in results:
-                                rss_data = results['rss']
-                                if rss_data.get('status') == 'success':
-                                    st.info(f"📰 RSS (zprávy): {rss_data.get('scraped_count', 0)} nových událostí")
-                                else:
-                                    st.warning("📰 RSS: Žádná nová data")
-                        
-                        with col2:
-                            total_saved = result.get('total_events_saved', 0)
-                            if total_saved > 0:
-                                st.success(f"💾 Celkem uloženo: {total_saved} nových událostí")
-                            else:
-                                st.info("ℹ️ Žádné nové události k uložení")
-                        
-                        # Přidání tlačítka pro obnovení dat
-                        if st.button("🔄 Obnovit zobrazení", help="Načte nejnovější data z databáze"):
-                            st.rerun()
-                    else:
-                        st.info("ℹ️ Scraping dokončen, ale žádná nová data nebyla nalezena")
-                else:
-                    st.error("❌ Chyba při scraping - zkuste to prosím znovu")
     else:
         st.warning("⚠️ Nelze načíst data pro filtry")
 
@@ -925,7 +1006,7 @@ if events and suppliers:
 # Záložky pro různé části aplikace
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🗺️ Mapa rizik", 
-    "📊 Statistiky", 
+    "🔍 Scraping", 
     "🏭 Dodavatelé", 
     "🔬 Pokročilá analýza",
     "ℹ️ O aplikaci"
@@ -1036,7 +1117,10 @@ with tab1:
                 center_lat, center_lon = DEFAULT_LAT, DEFAULT_LON
                 zoom_start = 8
             
-            m = create_risk_map(filtered_events, suppliers, center_lat, center_lon, zoom_start)
+            # Získání dat pro pokročilou analýzu
+            flood_data, geo_data = get_advanced_analysis()
+            
+            m = create_risk_map(filtered_events, suppliers, center_lat, center_lon, zoom_start, flood_data, geo_data)
             map_data = st_folium(
                 m, 
                 width=None,  # Automatická šířka
@@ -1052,8 +1136,7 @@ with tab1:
                 st.info("ℹ️ Žádné rizikové události k zobrazení - zobrazují se pouze dodavatelé.")
             elif len(suppliers) == 0:
                 st.info("ℹ️ Žádní dodavatelé k zobrazení - zobrazují se pouze rizikové události.")
-            else:
-                st.success(f"✅ Zobrazeno {len(filtered_events)} událostí a {len(suppliers)} dodavatelů")
+            # Odstraněno zobrazení počtu událostí a dodavatelů
                 
         except Exception as e:
             st.error(f"❌ Chyba při vytváření mapy: {str(e)}")
@@ -1063,19 +1146,91 @@ with tab1:
         st.info("💡 Zkuste spustit scraping pro získání dat nebo zkontrolujte připojení k backendu.")
 
 with tab2:
-    # Statistiky
+    # Scraping
     st.markdown("""
     <div style='background-color: #E3F2FD; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
-        <h3 style='color: #1976D2; margin-top: 0;'>📊 Komplexní analýza rizik</h3>
+        <h3 style='color: #1976D2; margin-top: 0;'>🔍 Aktualizace dat</h3>
         <p style='margin: 5px 0;'>
-            <strong>📈 Trendy:</strong> Vývoj rizik v čase<br>
-            <strong>🎯 Klíčové metriky:</strong> Přehled nejdůležitějších ukazatelů<br>
-            <strong>📊 Rozložení:</strong> Analýza podle typu a závažnosti<br>
-            <strong>🏭 Dopady:</strong> Vztahy mezi událostmi a dodavateli
+            <strong>🌤️ CHMI API:</strong> Meteorologická data a výstrahy<br>
+            <strong>📰 RSS feeds:</strong> Zprávy z českých médií<br>
+            <strong>💡 Cíl:</strong> Získání aktuálních rizikových událostí pro analýzu
         </p>
     </div>
     """, unsafe_allow_html=True)
     
+    # Vysvětlení scraping procesu
+    st.info("💡 **Jak funguje scraping**")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**🌤️ CHMI (Český hydrometeorologický ústav):**")
+        st.markdown("• Získává data o extrémním počasí a záplavách")
+        st.markdown("• Analýza meteorologických výstrah")
+        st.markdown("• Lokalizace rizikových oblastí v ČR")
+    
+    with col2:
+        st.markdown("**📰 RSS feeds (česká média):**")
+        st.markdown("• Monitoruje zprávy o protestech a nepokojích")
+        st.markdown("• Sleduje dodavatelské problémy a přerušení")
+        st.markdown("• Analýza geopolitických událostí")
+    
+    st.success("**🎯 Výsledek:** Automatické vytvoření rizikových událostí v databázi")
+    
+    # Tlačítko pro spuštění scraping
+    st.subheader("🔄 Spuštění scraping")
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        if st.button("🚀 Spustit scraping", type="primary", help="Spustí web scraping pro získání aktuálních dat"):
+            with st.spinner("Spouštím scraping..."):
+                result = run_scraping()
+                if result and isinstance(result, dict):
+                    # Uživatelsky přívětivé zobrazení výsledků
+                    st.success("✅ Scraping dokončen!")
+                    
+                    # Zobrazení přehledných výsledků
+                    if 'results' in result:
+                        results = result['results']
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if 'chmi' in results:
+                                chmi_data = results['chmi']
+                                if chmi_data.get('status') == 'success':
+                                    st.info(f"🌤️ CHMI (počasí): {chmi_data.get('scraped_count', 0)} nových událostí")
+                                else:
+                                    st.warning("🌤️ CHMI: Žádná nová data")
+                            
+                            if 'rss' in results:
+                                rss_data = results['rss']
+                                if rss_data.get('status') == 'success':
+                                    st.info(f"📰 RSS (zprávy): {rss_data.get('scraped_count', 0)} nových událostí")
+                                else:
+                                    st.warning("📰 RSS: Žádná nová data")
+                        
+                        with col2:
+                            total_saved = result.get('total_events_saved', 0)
+                            if total_saved > 0:
+                                st.success(f"💾 Celkem uloženo: {total_saved} nových událostí")
+                            else:
+                                st.info("ℹ️ Žádné nové události k uložení")
+                        
+                        # Přidání tlačítka pro obnovení dat
+                        if st.button("🔄 Obnovit zobrazení", help="Načte nejnovější data z databáze"):
+                            st.rerun()
+                    else:
+                        st.info("ℹ️ Scraping dokončen, ale žádná nová data nebyla nalezena")
+                else:
+                    st.error("❌ Chyba při scraping - zkuste to prosím znovu")
+    
+    with col2:
+        st.info("💡 Tip: Spusťte scraping pro získání nejnovějších dat o rizicích")
+    
+    # Statistiky nejnovějších událostí
+    st.subheader("📊 Nejnovější události")
+    events = get_risk_events()
     if events:
         # Použití konzistentních statistik
         stats = get_consistent_statistics(events, suppliers)
@@ -1108,54 +1263,7 @@ with tab2:
         df_events['severity_cz'] = df_events['severity'].map(severity_translations).fillna('Neznámé')
         df_events['created_at'] = pd.to_datetime(df_events['created_at'])
         
-        # Klíčové metriky
-        st.subheader("🎯 Klíčové metriky")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("📊 Celkem událostí", stats['total_events'], help="Celkový počet rizikových událostí")
-        
-        with col2:
-            risk_percentage = (stats['high_critical_events'] / stats['total_events'] * 100) if stats['total_events'] > 0 else 0
-            st.metric("⚠️ Vysoké/Kritické riziko", f"{stats['high_critical_events']} ({risk_percentage:.1f}%)", 
-                     delta=f"{risk_percentage:.1f}%", help="Události s vysokým nebo kritickým rizikem")
-        
-        with col3:
-            st.metric("🕒 Posledních 7 dní", stats['recent_events'], help="Události z posledního týdne")
-        
-        with col4:
-            st.metric("🇨🇿 Události v ČR", stats['czech_events'], help="Události na území České republiky")
-        
-        # Zjednodušené grafy s lepšími vysvětleními
-        st.subheader("📊 Rozložení rizik")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Rozložení podle typu události - pouze pokud máme data
-            if not df_events.empty and 'event_type_cz' in df_events.columns:
-                event_type_counts = df_events['event_type_cz'].value_counts()
-                if not event_type_counts.empty:
-                    st.bar_chart(event_type_counts)
-                    st.caption("📊 Rozložení rizikových událostí podle typu")
-                else:
-                    st.info("ℹ️ Žádná data pro zobrazení grafu")
-            else:
-                st.info("ℹ️ Žádná data pro zobrazení grafu")
-        
-        with col2:
-            # Rozložení podle závažnosti - pouze pokud máme data
-            if not df_events.empty and 'severity_cz' in df_events.columns:
-                severity_counts = df_events['severity_cz'].value_counts()
-                if not severity_counts.empty:
-                    st.bar_chart(severity_counts)
-                    st.caption("⚠️ Rozložení událostí podle závažnosti")
-                else:
-                    st.info("ℹ️ Žádná data pro zobrazení grafu")
-            else:
-                st.info("ℹ️ Žádná data pro zobrazení grafu")
-        
         # Nejnovější události s lepším formátováním
-        st.subheader("🕒 Nejnovější události")
         if not df_events.empty:
             latest_events = df_events.sort_values('created_at', ascending=False).head(10)
             
@@ -1179,6 +1287,9 @@ with tab2:
                         use_container_width=True, height=400)
         else:
             st.info("ℹ️ Žádné události k zobrazení")
+    else:
+        st.error("❌ Nelze načíst rizikové události")
+        st.info("💡 Zkuste spustit scraping pro získání dat nebo zkontrolujte připojení k backendu.")
 
 with tab3:
     # Dodavatelé - vylepšené
@@ -1201,8 +1312,21 @@ with tab3:
         # Použití konzistentních statistik
         stats = get_consistent_statistics(events, suppliers)
         
-        # Převod na DataFrame
-        df_suppliers = pd.DataFrame(suppliers)
+        # Filtrování dodavatelů - pouze ti, kteří se zobrazí na mapě
+        filtered_suppliers = []
+        for supplier in suppliers:
+            try:
+                lat = float(supplier.get("latitude", 0))
+                lon = float(supplier.get("longitude", 0))
+                
+                # Kontrola, že souřadnice jsou v rozumném rozsahu a v ČR
+                if (-90 <= lat <= 90) and (-180 <= lon <= 180) and is_in_czech_republic(lat, lon):
+                    filtered_suppliers.append(supplier)
+            except:
+                pass
+        
+        # Převod na DataFrame - pouze filtrovaní dodavatelé
+        df_suppliers = pd.DataFrame(filtered_suppliers)
         
         # Překladové slovníky
         category_translations = {
@@ -1225,13 +1349,14 @@ with tab3:
         }
         
         # Přidání přeložených sloupců
-        df_suppliers['category_cz'] = df_suppliers['category'].map(category_translations).fillna('Neznámé')
-        df_suppliers['risk_level_cz'] = df_suppliers['risk_level'].map(risk_translations).fillna('Neznámé')
-        df_suppliers['created_at'] = pd.to_datetime(df_suppliers['created_at'])
+        if not df_suppliers.empty:
+            df_suppliers['category_cz'] = df_suppliers['category'].map(category_translations).fillna('Neznámé')
+            df_suppliers['risk_level_cz'] = df_suppliers['risk_level'].map(risk_translations).fillna('Neznámé')
+            df_suppliers['created_at'] = pd.to_datetime(df_suppliers['created_at'])
         
         # Klíčové metriky dodavatelů
-        st.subheader("🎯 Klíčové metriky dodavatelů")
-        col1, col2, col3, col4 = st.columns(4)
+        st.subheader("🎯 Přehled dodavatelů")
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             st.metric("🏭 Celkem dodavatelů", stats['total_suppliers'], help="Celkový počet dodavatelů")
@@ -1242,47 +1367,15 @@ with tab3:
                      delta=f"{risk_percentage:.1f}%", help="Dodavatelé s vysokým rizikem")
         
         with col3:
-            categories_count = len(set([s.get("category", "unknown") for s in suppliers]))
-            st.metric("🏷️ Kategorie", categories_count, help="Počet různých kategorií dodavatelů")
-        
-        with col4:
             st.metric("🇨🇿 Dodavatelé v ČR", stats['czech_suppliers'], help="Dodavatelé na území České republiky")
         
-        # Zjednodušené grafy
-        st.subheader("📊 Rozložení dodavatelů")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Rozložení podle kategorie - pouze pokud máme data
-            if not df_suppliers.empty and 'category_cz' in df_suppliers.columns:
-                category_counts = df_suppliers['category_cz'].value_counts()
-                if not category_counts.empty:
-                    st.bar_chart(category_counts)
-                    st.caption("Rozložení podle kategorie")
-                else:
-                    st.info("ℹ️ Žádná data pro zobrazení grafu")
-            else:
-                st.info("ℹ️ Žádná data pro zobrazení grafu")
-        
-        with col2:
-            # Rozložení podle rizika - pouze pokud máme data
-            if not df_suppliers.empty and 'risk_level_cz' in df_suppliers.columns:
-                risk_counts = df_suppliers['risk_level_cz'].value_counts()
-                if not risk_counts.empty:
-                    st.bar_chart(risk_counts)
-                    st.caption("Rozložení podle úrovně rizika")
-                else:
-                    st.info("ℹ️ Žádná data pro zobrazení grafu")
-            else:
-                st.info("ℹ️ Žádná data pro zobrazení grafu")
-        
-        # Seznam dodavatelů s vylepšeným formátováním
+        # Seznam dodavatelů - vylepšená tabulka
         st.subheader("📋 Seznam dodavatelů")
         if not df_suppliers.empty:
             # Vylepšené zobrazení tabulky
             display_df = df_suppliers[['name', 'category_cz', 'risk_level_cz', 'created_at']].copy()
-            display_df['created_at'] = display_df['created_at'].dt.strftime('%d.%m.%Y %H:%M')
-            display_df.columns = ['Název', 'Kategorie', 'Úroveň rizika', 'Datum']
+            display_df['created_at'] = display_df['created_at'].dt.strftime('%d.%m.%Y')
+            display_df.columns = ['Název dodavatele', 'Kategorie', 'Úroveň rizika', 'Datum přidání']
             
             # Přidání barevného formátování
             def color_risk(val):
@@ -1294,70 +1387,83 @@ with tab3:
                     return 'background-color: #c8e6c9'
             
             st.dataframe(display_df.style.applymap(color_risk, subset=['Úroveň rizika']), 
-                        use_container_width=True, height=400)
+                        use_container_width=True, height=500)
+            
+            # Vysvětlení - tabulka zobrazuje pouze dodavatele z mapy
+            st.success("✅ Tabulka zobrazuje pouze dodavatele, kteří jsou zobrazeni na mapě (v ČR s platnými souřadnicemi)")
         else:
             st.info("ℹ️ Žádní dodavatelé k zobrazení")
-        
-        # Souhrnné statistiky dodavatelů
-        st.subheader("📋 Souhrnné statistiky dodavatelů")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            <div style='background-color: #F5F5F5; padding: 15px; border-radius: 8px;'>
-                <h5 style='margin-top: 0;'>📊 Přehled dodavatelů</h5>
-                <ul style='margin: 5px 0; padding-left: 20px;'>
-                    <li><strong>Celkem dodavatelů:</strong> {}</li>
-                    <li><strong>Vysoké riziko:</strong> {} ({:.1f}%)</li>
-                    <li><strong>Dodavatelé v ČR:</strong> {}</li>
-                    <li><strong>Různé kategorie:</strong> {}</li>
-                </ul>
-            </div>
-            """.format(
-                stats['total_suppliers'],
-                stats['high_risk_suppliers'],
-                (stats['high_risk_suppliers'] / stats['total_suppliers'] * 100) if stats['total_suppliers'] > 0 else 0,
-                stats['czech_suppliers'],
-                len(set([s.get("category", "unknown") for s in suppliers]))
-            ), unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown("""
-            <div style='background-color: #E8F5E8; padding: 15px; border-radius: 8px;'>
-                <h5 style='margin-top: 0;'>🎯 Doporučení pro dodavatele</h5>
-                <ul style='margin: 5px 0; padding-left: 20px;'>
-                    <li><strong>Priorita 1:</strong> Monitorovat dodavatele s vysokým rizikem</li>
-                    <li><strong>Priorita 2:</strong> Analyzovat rizikové kategorie</li>
-                    <li><strong>Priorita 3:</strong> Kontaktovat kritické dodavatele</li>
-                    <li><strong>Priorita 4:</strong> Aktualizovat data pravidelně</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
-    
     else:
-        st.warning("⚠️ Nelze načíst data dodavatelů")
+        st.error("❌ Nelze načíst data dodavatelů")
+        st.info("💡 Zkontrolujte připojení k backendu nebo zkuste později.")
 
 with tab4:
-    st.markdown("## 🔬 Pokročilá analýza rizik")
-    st.markdown("### Simulace záplav a geografická analýza")
+    # Pokročilá analýza - vylepšená
+    st.markdown("""
+    <div style='background-color: #E8F5E8; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
+        <h3 style='color: #2E7D32; margin-top: 0;'>🔬 Pokročilá analýza rizik</h3>
+        <p style='margin: 5px 0;'>
+            <strong>🎯 Účel:</strong> Hlubší analýza rizik a jejich dopadů na dodavatelský řetězec<br>
+            <strong>🌊 Simulace záplav:</strong> Modelování dopadů povodní na konkrétní dodavatele<br>
+            <strong>🔗 Analýza dodavatelského řetězce:</strong> Hodnocení dopadů událostí na dodávky<br>
+            <strong>🗺️ Geografická analýza:</strong> Komplexní posouzení rizik pro libovolnou lokaci
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Načtení dat
+    # Přidání srovnání nástrojů
+    st.markdown("""
+    <div style='background-color: #FFF8E1; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <h4 style='color: #F57C00; margin-top: 0;'>📊 Srovnání analytických nástrojů</h4>
+        <div style='display: flex; justify-content: space-between; margin: 10px 0;'>
+            <div style='flex: 1; margin-right: 20px;'>
+                <strong>🌊 Simulace záplav:</strong><br>
+                • Zaměřeno na dodavatele<br>
+                • Analýza polygonů řek<br>
+                • Výstup: pravděpodobnost záplav<br>
+                • Praktické využití: identifikace ohrožených dodavatelů
+            </div>
+            <div style='flex: 1;'>
+                <strong>🗺️ Geografická analýza:</strong><br>
+                • Zaměřeno na lokace<br>
+                • Kombinace více faktorů<br>
+                • Výstup: celkový risk score<br>
+                • Praktické využití: výběr bezpečných lokalit
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Získání dat pro pokročilou analýzu
     flood_data, supply_chain_data = get_advanced_analysis()
     
-    # Sekce 1: River Flood Simulation
+    # Sekce 1: Simulace záplav - zjednodušená
     st.markdown("#### 🌊 Simulace záplav")
+    
+    st.markdown("""
+    <div style='background-color: #FFF3E0; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <h4 style='color: #F57C00; margin-top: 0;'>💡 Jak funguje simulace záplav</h4>
+        <p style='margin: 5px 0; font-size: 0.9em;'>
+            <strong>🎯 Cíl:</strong> Simulace dopadů povodní na konkrétní dodavatele<br>
+            <strong>📊 Metodika:</strong> Analýza vzdálenosti od polygonů řek + nadmořská výška<br>
+            <strong>⚠️ Výstup:</strong> Pravděpodobnost záplav pro každého dodavatele<br>
+            <strong>💡 Praktický význam:</strong> Identifikace dodavatelů ohrožených povodněmi<br>
+            <strong>🗺️ Vizualizace:</strong> Výsledky se zobrazí na mapě s červenými značkami (🌊)
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     if "error" not in flood_data:
         if "flood_analysis" in flood_data:
-            st.success(f"✅ Analýza dokončena pro {flood_data['total_suppliers_analyzed']} dodavatelů")
+            st.success(f"✅ Simulace dokončena pro {flood_data['total_suppliers_analyzed']} dodavatelů")
             st.info(f"⚠️ {flood_data['high_risk_suppliers']} dodavatelů v rizikových oblastech")
             
-            # Zobrazení výsledků
-            for analysis in flood_data['flood_analysis'][:5]:  # Zobrazíme prvních 5
+            # Zobrazení výsledků - zjednodušené
+            for analysis in flood_data['flood_analysis'][:3]:  # Zobrazíme prvních 3
                 supplier = analysis['supplier']
                 flood_risk = analysis['flood_risk']
                 
-                with st.expander(f"🏭 {supplier['name']} ({supplier['category']})"):
+                with st.expander(f"🏭 {supplier['name']} - {flood_risk['impact_level'].upper()}"):
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
@@ -1369,11 +1475,17 @@ with tab4:
                         st.metric("Nadmořská výška", f"{flood_risk['elevation_m']:.0f} m")
                     
                     with col3:
-                        st.metric("Hladina záplav", f"{flood_risk['flood_level_m']} m")
                         if flood_risk['mitigation_needed']:
                             st.error("⚠️ Potřebná mitigace")
+                            st.markdown("**Doporučení:**")
+                            st.markdown("• Přesunout výrobu do bezpečnější lokace")
+                            st.markdown("• Instalovat protipovodňová opatření")
+                            st.markdown("• Vytvořit záložní dodavatelský řetězec")
                         else:
                             st.success("✅ Bezpečná oblast")
+                    
+                    # Informace o vizualizaci na hlavní mapě
+                    st.info("🗺️ Výsledky simulace se zobrazují na hlavní mapě v záložce 'Mapa rizik' s červenými značkami pro rizikové dodavatele.")
         else:
             st.warning("Žádná data k zobrazení")
     else:
@@ -1381,16 +1493,28 @@ with tab4:
     
     st.markdown("---")
     
-    # Sekce 2: Supply Chain Impact Analysis
+    # Sekce 2: Supply Chain Impact Analysis - zjednodušená
     st.markdown("#### 🔗 Analýza dopadu na dodavatelský řetězec")
+    
+    st.markdown("""
+    <div style='background-color: #E3F2FD; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <h4 style='color: #1976D2; margin-top: 0;'>💡 Jak funguje analýza dodavatelského řetězce</h4>
+        <p style='margin: 5px 0; font-size: 0.9em;'>
+            <strong>🎯 Cíl:</strong> Hodnocení dopadů rizikových událostí na dodávky<br>
+            <strong>📊 Metodika:</strong> Analýza událostí v okolí dodavatelů a jejich kritičnosti<br>
+            <strong>⚠️ Výstup:</strong> Pravděpodobnost přerušení dodávek a doba obnovy<br>
+            <strong>💡 Praktický význam:</strong> Plánování záložních dodavatelů a krizového managementu
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     if "error" not in supply_chain_data:
         if "supply_chain_analysis" in supply_chain_data:
             st.success(f"✅ Analýza dokončena pro {supply_chain_data['total_suppliers']} dodavatelů")
             st.info(f"⚠️ {supply_chain_data['high_risk_suppliers']} dodavatelů s vysokým rizikem")
             
-            # Zobrazení výsledků
-            for analysis in supply_chain_data['supply_chain_analysis'][:5]:  # Zobrazíme prvních 5
+            # Zobrazení výsledků - zjednodušené
+            for analysis in supply_chain_data['supply_chain_analysis'][:3]:  # Zobrazíme prvních 3
                 supplier = analysis['supplier']
                 impact = analysis['impact_assessment']
                 
@@ -1419,8 +1543,21 @@ with tab4:
     
     st.markdown("---")
     
-    # Sekce 3: Geographic Risk Assessment Tool
+    # Sekce 3: Geographic Risk Assessment Tool - zjednodušená
     st.markdown("#### 🗺️ Geografická analýza rizik")
+    
+    st.markdown("""
+    <div style='background-color: #F3E5F5; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <h4 style='color: #7B1FA2; margin-top: 0;'>💡 Jak funguje geografická analýza</h4>
+        <p style='margin: 5px 0; font-size: 0.9em;'>
+            <strong>🎯 Cíl:</strong> Komplexní posouzení rizik pro libovolnou lokaci<br>
+            <strong>📊 Metodika:</strong> Kombinace analýzy řek + terénu + historických událostí<br>
+            <strong>⚠️ Výstup:</strong> Celkový risk score a doporučení pro lokaci<br>
+            <strong>💡 Praktický význam:</strong> Výběr bezpečných lokalit pro nové dodavatele<br>
+            <strong>🗺️ Vizualizace:</strong> Výsledky se zobrazí na mapě s barevným kódováním (🗺️)
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
@@ -1468,37 +1605,16 @@ with tab4:
                     st.markdown("**📋 Doporučení:**")
                     for rec in risk_assessment['recommendations']:
                         st.markdown(f"• {rec}")
-                        
-                else:
-                    st.error("❌ Chyba při analýze")
                     
+                    # Informace o vizualizaci na hlavní mapě
+                    st.info("🗺️ Výsledky geografické analýzy se zobrazují na hlavní mapě v záložce 'Mapa rizik' s barevným kódováním rizik (červená = vysoké, oranžová = střední, zelená = nízké).")
+                    
+                else:
+                    st.error(f"❌ Chyba při analýze: {response.status_code}")
             except Exception as e:
                 st.error(f"❌ Chyba: {str(e)}")
-    
-    st.markdown("---")
-    
-    # Sekce 4: Informace o funkcích
-    st.markdown("#### 💡 Informace o pokročilých funkcích")
-    
-    st.markdown("""
-    **🌊 Simulace záplav:**
-    - Výpočet vzdálenosti od hlavních řek ČR
-    - Analýza nadmořské výšky a terénu
-    - Simulace pravděpodobnosti záplav
-    - Hodnocení dopadu na dodavatele
-    
-    **🔗 Analýza dodavatelského řetězce:**
-    - Identifikace kritických dodavatelů
-    - Simulace dopadu událostí na dodávky
-    - Odhad doby obnovy po přerušení
-    - Generování mitigačních opatření
-    
-    **🗺️ Geografická analýza:**
-    - Komplexní hodnocení rizik pro danou lokaci
-    - Kombinace více faktorů (řeky, výška, historie)
-    - Doporučení pro snížení rizik
-    - Monitoring změn v čase
-    """)
+        else:
+            st.info("💡 Zadejte souřadnice a spusťte analýzu")
 
 with tab5:
     st.header("ℹ️ O aplikaci")
@@ -1529,9 +1645,9 @@ with tab5:
             <ul style='margin: 5px 0; padding-left: 20px;'>
                 <li><strong>🗺️ Interaktivní mapa</strong> - vizualizace rizikových událostí a dodavatelů</li>
                 <li><strong>🔍 Pokročilé filtry</strong> - filtrování podle typu, závažnosti, zdroje a času</li>
-                <li><strong>📊 Analytické statistiky</strong> - analýza rozložení rizik</li>
-                <li><strong>🔄 Automatický scraping</strong> - získávání aktuálních dat z RSS a API</li>
+                <li><strong>🔍 Automatický scraping</strong> - získávání aktuálních dat z RSS a API</li>
                 <li><strong>🏭 Dodavatelská analýza</strong> - hodnocení rizik dodavatelů</li>
+                <li><strong>🔬 Pokročilá analýza</strong> - simulace záplav a geografická analýza</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -1576,6 +1692,15 @@ with tab5:
                 </ul>
             </div>
         </div>
+        <div style='margin-top: 15px; padding: 10px; background-color: #FFF3E0; border-radius: 5px;'>
+            <h4 style='color: #F57C00; margin-top: 0;'>🔍 Filtry a jejich význam</h4>
+            <p style='margin: 5px 0; font-size: 0.9em;'>
+                <strong>📊 Typ události:</strong> Záplavy, protesty, dodavatelské problémy, geopolitické události<br>
+                <strong>⚠️ Závažnost:</strong> Kritické (okamžitý dopad) až Nízké (minimální riziko)<br>
+                <strong>🔗 Zdroj dat:</strong> CHMI API (počasí), RSS feeds (zprávy), ručně přidané<br>
+                <strong>📅 Časové období:</strong> Filtrování podle data události
+            </p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1589,43 +1714,17 @@ with tab5:
             <li><strong>Včasné varování:</strong> Identifikace rizikových oblastí před dopadem na výrobu</li>
             <li><strong>Dodavatelská analýza:</strong> Hodnocení rizik jednotlivých dodavatelů</li>
             <li><strong>Geografická analýza:</strong> Vizualizace rizikových oblastí na mapě</li>
-            <li><strong>Trendová analýza:</strong> Sledování vývoje rizik v čase</li>
-            <li><strong>Reportování:</strong> Generování reportů pro management</li>
+            <li><strong>Automatický monitoring:</strong> Sledování vývoje rizik v čase</li>
+            <li><strong>Pokročilé simulace:</strong> Modelování dopadů záplav a událostí</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
-
-# Patička aplikace
-st.markdown("---")
-st.markdown(
-    """
-    <div style='text-align: center; color: #666; padding: 10px;'>
-        <p>© 2025 Risk Analyst Dashboard</p>
-        <p style='font-size: 0.8em;'>
-            Vytvořeno jako ukázka technických dovedností pro pozici Risk Analyst
-        </p>
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #666; font-size: 0.9em;'>
+        © 2025 Risk Analyst Dashboard | Vytvořeno jako ukázka technických dovedností
     </div>
-    """,
-    unsafe_allow_html=True
-) 
-
-def get_advanced_analysis():
-    """Získání dat pro pokročilou analýzu"""
-    try:
-        # River flood simulation
-        response = requests.get(f"{BACKEND_URL}/api/analysis/river-flood-simulation")
-        if response.status_code == 200:
-            flood_data = response.json()
-        else:
-            flood_data = {"error": "Nepodařilo se načíst data o záplavách"}
-        
-        # Supply chain impact
-        response = requests.get(f"{BACKEND_URL}/api/analysis/supply-chain-impact")
-        if response.status_code == 200:
-            supply_chain_data = response.json()
-        else:
-            supply_chain_data = {"error": "Nepodařilo se načíst data o dodavatelském řetězci"}
-        return flood_data, supply_chain_data
-    except Exception as e:
-        return {"error": f"Chyba: {str(e)}"}, {"error": f"Chyba: {str(e)}"}
+    """, unsafe_allow_html=True)
     
