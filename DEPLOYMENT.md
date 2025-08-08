@@ -112,9 +112,10 @@ Pro plně funkční nasazení potřebujeme:
 - **Health Check**: `https://risk-analyst.onrender.com/`
 - **API Dokumentace**: `https://risk-analyst.onrender.com/docs`
 - **Test Endpointy**:
-  - `/api/test-chmi` - Test CHMI API
+   - `/api/test-chmi` - Test CHMI (HTML) parsování a lokalizace
   - `/api/test-openmeteo` - Test OpenMeteo API
   - `/api/test-scraping-improved` - Test vylepšeného scrapingu
+   - `/api/maintenance/clear-irrelevant-rss` - Údržba, smazání irelevantních RSS
 
 ### Frontend
 - **URL**: `https://memory-map-feature-risk-analyst-frontend-app.onrender.com`
@@ -205,6 +206,7 @@ streamlit run app.py
 - Cachování dat v session state
 - Efektivní dotazy s PostGIS indexy
 - Minimalizace API volání
+ - Clustering markerů na mapě pro přehlednost ve frontendu
 
 ## 9. Security
 

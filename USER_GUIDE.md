@@ -1,6 +1,16 @@
-# Uživatelská příručka MemoryMap
+# Uživatelská příručka – Risk Analyst Dashboard
 
-> **Aplikace vytvořená za účelem pohovoru** - Tento projekt demonstruje praktické dovednosti v oblasti full-stack vývoje.
+> **Aplikace vytvořená za účelem pohovoru** – Projekt demonstruje full‑stack vývoj, práci s reálnými daty (CHMI/RSS), GIS a interaktivní mapy.
+
+## Aktuální informace
+
+- Frontend: https://risk-analyst-sh.streamlit.app/
+- Backend API: https://risk-analyst.onrender.com
+
+- Mapa používá clustering pinů (události a dodavatelé) pro přehlednost
+- Události se zobrazují pouze s validní CZ lokalizací (žádný „střed ČR“)
+- V tabu „📰 Scraping“ lze spustit sběr dat (CHMI, RSS)
+- V „🔬 Pokročilá analýza“ vyberte dodavatele nebo zadejte lat/lon a klikněte „Spustit analýzu“
 
 ## Úvod
 

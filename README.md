@@ -4,22 +4,29 @@
 
 Interaktivní dashboard pro analýzu rizikových událostí v dodavatelském řetězci VW Group s využitím reálných dat z CHMI API, OpenMeteo API a RSS feeds.
 
-![Risk Analyst Dashboard Preview](https://i.imgur.com/example.png)
-
 ## 🌟 Funkce
 
-- **Interaktivní mapa rizik** zobrazující rizikové události a dodavatele VW Group
-- **Web scraping** reálných dat z CHMI (počasí), OpenMeteo API (meteorologická data) a RSS feeds (zprávy)
+- **Interaktivní mapa rizik** zobrazující rizikové události a dodavatele VW Group (s clusteringem značek pro přehlednost)
+- **Web scraping** reálných dat z CHMI (počasí), OpenMeteo API (meteorologická data) a RSS feeds (zprávy) s přísnou lokalizací (žádné generické body uprostřed ČR)
 - **Filtry** podle typu události, závažnosti, zdroje dat a časového období
 - **Analýza dodavatelů** s rizikovým hodnocením a kategorizací
 - **Statistiky a trendy** rizikových událostí v čase
 - **Geografické omezení** na území České republiky
 - **Responzivní design** pro používání na počítači i mobilních zařízeních
-- **Pokročilé GIS funkce** včetně analýzy vzdálenosti od řek a simulace záplav
+- **Pokročilé GIS funkce** včetně analýzy vzdálenosti od řek a simulace záplav (PostGIS funkce, metriky v km)
+
+### Co je nově důležité
+
+- **Přísná lokalizace událostí**: RSS/CHMI událost se uloží jen pokud má validní českou lokalitu (z titulku/description, případně geokódování CZ; jinak se neuloží).
+- **CHMI extrakce**: flood event vznikne pouze při zjištěných stavech SPA/bdělost/pohotovost/ohrožení; "Normální stav" nic nevytváří.
+- **Geokódování CZ**: při nejasné lokalitě se použije geokódování (CZ), případně centroid konkrétní řeky z DB.
+- **Clustering**: značky událostí i dodavatelů jsou clusterované (lepší čitelnost).
+- **DB funkce**: `analyze_flood_risk_from_rivers(lat, lon)` (2 parametry) a `calculate_river_distance(lat, lon)`; přidané **constrainty** zajišťují správnost lat/lon.
+- **Údržba dat**: endpoint `POST /api/maintenance/clear-irrelevant-rss` smaže zjevně irelevantní RSS (právo/krimi apod.).
 
 ## 🔗 Odkazy
 
-- **Frontend**: [https://memory-map-feature-risk-analyst-frontend-app.onrender.com](https://memory-map-feature-risk-analyst-frontend-app.onrender.com)
+- **Frontend**: [https://risk-analyst-sh.streamlit.app/](https://risk-analyst-sh.streamlit.app/)
 - **Backend API**: [https://risk-analyst.onrender.com](https://risk-analyst.onrender.com)
 - **API dokumentace**: [https://risk-analyst.onrender.com/docs](https://risk-analyst.onrender.com/docs)
 - **GitHub Repository**: [https://github.com/moziyuri/memory_map/tree/feature/risk-analyst](https://github.com/moziyuri/memory_map/tree/feature/risk-analyst)
@@ -124,9 +131,9 @@ risk-analyst-dashboard/
 ## 📊 Zdroje dat
 
 ### Reálná data
-- **CHMI API** - Meteorologická data a varování (počasí, povodně)
-- **OpenMeteo API** - Spolehlivé meteorologické data jako primární zdroj
-- **RSS feeds** - Zprávy z českých médií (Novinky.cz, Seznam Zprávy, HN.cz, iRozhlas)
+- **CHMI** - Meteorologická/hydrologická data a varování; flood událost pouze při stavech SPA/bdělost/pohotovost/ohrožení a s ověřenou lokalizací.
+- **OpenMeteo API** - Spolehlivá meteorologická data (primární zdroj pro počasí)
+- **RSS feeds** - Zprávy z českých médií; události vznikají jen s validní českou lokalitou (jinak se zahodí)
 
 ### Demo data
 - **Dodavatelé VW Group** - Fiktivní dodavatelé s rizikovým hodnocením
@@ -179,9 +186,9 @@ Aplikace je nasazena na:
 - Robustní error handling a fallback mechanismy
 
 ### GIS Analýza
-- Geografické omezení na ČR
+- Geografické omezení na ČR (volitelný filtr ve UI)
 - Výpočet rizik v okolí dodavatelů
-- Analýza vzdálenosti od řek a simulace záplav
+- Analýza vzdálenosti od řek (`calculate_river_distance`) a simulace záplav (`analyze_flood_risk_from_rivers(lat, lon)`) – 2‑parametrická DB funkce
 - Vizualizace na interaktivní mapě
 
 ### Supply Chain Risk Management

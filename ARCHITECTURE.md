@@ -112,22 +112,22 @@ CREATE TABLE rivers (
 | GET    | /api/risks                 | Získání všech rizikových událostí         |
 | GET    | /api/suppliers             | Získání všech dodavatelů VW Group         |
 | GET    | /api/analysis/risk-map     | Získání dat pro mapu rizik                |
-| GET    | /api/scrape/chmi           | Spuštění web scraping z CHMI API          |
+| GET    | /api/scrape/chmi           | Spuštění web scrapingu z CHMI (lokalizace jen s validní výstrahou) |
 | GET    | /api/scrape/rss            | Spuštění web scraping z RSS feeds         |
 | GET    | /api/scrape/run-all        | Spuštění všech web scrapers               |
 | GET    | /api/test-chmi             | Test CHMI API endpointů                   |
 | GET    | /api/test-openmeteo        | Test OpenMeteo API                        |
 | GET    | /api/test-scraping-improved| Test vylepšeného scrapingu                |
+| POST   | /api/maintenance/clear-irrelevant-rss | Smaže irelevantní RSS události |
 
 ## Zdroje dat
 
 ### Reálná data (Web Scraping)
 
-#### CHMI API
-- **Endpoint**: `https://hydro.chmi.cz/hpps/`
-- **Typ dat**: Meteorologická data a varování
-- **Frekvence**: Real-time
-- **Status**: Funkční s fallback na OpenMeteo API
+#### CHMI
+- **Zdroj**: `https://hydro.chmi.cz/hpps/`
+- **Typ dat**: Hydrologické/meterologické stavy a varování (HTML)
+- **Pravidla**: Flood událost vzniká jen při SPA/bdělost/pohotovost/ohrožení a s ověřenou lokalizací (stanice+řeka → geokód/cz; jinak neuložit)
 
 #### OpenMeteo API
 - **Endpoint**: `https://api.open-meteo.com/v1/forecast`
@@ -138,9 +138,7 @@ CREATE TABLE rivers (
 
 #### RSS Feeds
 - **Zdroje**: Novinky.cz, Seznam Zprávy, HN.cz, iRozhlas
-- **Typ dat**: Zprávy a události
-- **Frekvence**: Real-time
-- **Status**: Funkční s vylepšenými filtry
+- **Pravidla**: Vyloučení právní/krimi; flood vyžaduje hydro termíny + lokalizaci CZ; supply_chain vyžaduje dopravní/infrastrukturní termíny + lokalizaci CZ; bez lokace se událost nevytvoří
 
 ### Demo data
 
@@ -156,7 +154,8 @@ CREATE TABLE rivers (
 - **Výpočet vzdálenosti od řek**: Analýza blízkosti hlavních řek ČR
 - **Simulace záplav**: Hodnocení rizika záplav na základě vzdálenosti od řek
 - **Geografické indexy**: Optimalizace prostorových dotazů
-- **PostGIS funkce**: Pokročilé geografické operace
+- **PostGIS funkce**: `calculate_river_distance(lat, lon)`, `analyze_flood_risk_from_rivers(lat, lon)` (2 parametry)
+- **Constrainty**: Kontrola rozsahu lat/lon na úrovni DB
 
 ### Error Handling
 - **Robustní database initialization**: Lepší error handling při inicializaci

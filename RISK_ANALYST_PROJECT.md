@@ -42,8 +42,8 @@
 - **Automated reporting** - Automatické generování reportů
 
 ### **🌤️ Weather Data Integration**
-- **OpenMeteo API** - Spolehlivé meteorologické data
-- **CHMI API fallback** - Alternativní zdroj českých meteorologických dat
+- **OpenMeteo API** - Spolehlivé meteorologické data (primární)
+- **CHMI (HTML)** - Česká hydrologická/meterologická data; flood event vzniká jen při stavech SPA/bdělost/pohotovost/ohrožení a s ověřenou CZ lokalizací (stanice/řeka)
 - **Real-time weather monitoring** - Sledování aktuálních podmínek
 - **Weather-based risk assessment** - Hodnocení rizik na základě počasí
 
@@ -84,6 +84,11 @@ GET /api/test-openmeteo
 ```python
 GET /api/test-scraping-improved
 - Komplexní test všech scraperů
+```
+### **Maintenance**
+```python
+POST /api/maintenance/clear-irrelevant-rss
+- Smaže zjevně irelevantní RSS (právo/krimi) na základě klíčových slov (ikem/soud/vydír/obžal/policie/krimi/vyšetřov)
 ```
 
 ---
@@ -198,7 +203,7 @@ $$ LANGUAGE plpgsql;
 
 ### **Reálná data**
 - **OpenMeteo API** - Primární zdroj meteorologických dat
-- **CHMI API** - Česká meteorologická data (fallback)
+- **CHMI (HTML)** - Česká hydrologická/meterologická data; přísná pravidla pro vznik událostí (SPA/bdělost/pohotovost/ohrožení + ověřená CZ lokalizace)
 - **RSS feeds** - Zprávy z českých médií
 - **River Network Data** - Geografická data řek ČR
 - **Historical Event Database** - Historické události pro korelaci

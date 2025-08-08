@@ -231,6 +231,51 @@ $$ LANGUAGE plpgsql;
 """)
         except Exception as e:
             print(f"⚠️ Chyba při vytváření analyze_flood_risk_from_rivers: {str(e)}")
+
+        # Funkce pro výpočet vzdálenosti k nejbližší řece (km)
+        try:
+            cur.execute("""
+CREATE OR REPLACE FUNCTION calculate_river_distance(lat DOUBLE PRECISION, lon DOUBLE PRECISION)
+RETURNS DOUBLE PRECISION AS $$
+DECLARE
+    nearest_km DOUBLE PRECISION;
+BEGIN
+    SELECT MIN(
+        ST_Distance(
+            ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+            geometry::geography
+        )
+    ) / 1000.0 INTO nearest_km
+    FROM rivers;
+    
+    IF nearest_km IS NULL THEN
+        RETURN 50.0; -- default
+    END IF;
+    RETURN nearest_km;
+END;
+$$ LANGUAGE plpgsql;
+""")
+            print("✅ Funkce calculate_river_distance vytvořena")
+        except Exception as e:
+            print(f"⚠️ Chyba při vytváření calculate_river_distance: {str(e)}")
+
+        # Datové constrainty na lat/lon – guard proti špatným hodnotám
+        try:
+            cur.execute("""
+ALTER TABLE risk_events
+    ADD CONSTRAINT chk_risk_events_lat CHECK (ST_Y(location::geometry) BETWEEN -90 AND 90),
+    ADD CONSTRAINT chk_risk_events_lon CHECK (ST_X(location::geometry) BETWEEN -180 AND 180);
+            """)
+        except Exception as e:
+            print(f"ℹ️ Constrainty risk_events již existují nebo nelze přidat: {str(e)}")
+        try:
+            cur.execute("""
+ALTER TABLE vw_suppliers
+    ADD CONSTRAINT chk_suppliers_lat CHECK (ST_Y(location::geometry) BETWEEN -90 AND 90),
+    ADD CONSTRAINT chk_suppliers_lon CHECK (ST_X(location::geometry) BETWEEN -180 AND 180);
+            """)
+        except Exception as e:
+            print(f"ℹ️ Constrainty vw_suppliers již existují nebo nelze přidat: {str(e)}")
         
         # 3. Vytvoření geografických indexů
         print("🗺️ Vytvářím geografické indexy...")
@@ -310,11 +355,11 @@ $$ LANGUAGE plpgsql;
                 exists = cur.fetchone()[0] > 0
                 
                 if not exists:
-                    # Vložíme nového dodavatele
+                    # Vložíme nového dodavatele (správné pořadí X=lon, Y=lat)
                     cur.execute("""
                         INSERT INTO vw_suppliers (name, location, category, risk_level)
                         VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
-                    """, supplier)
+                    """, (supplier[0], supplier[2], supplier[1], supplier[3], supplier[4]))
                     suppliers_added += 1
                 else:
                     suppliers_skipped += 1

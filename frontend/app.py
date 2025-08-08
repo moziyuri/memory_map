@@ -545,7 +545,7 @@ def main():
     
     # Tab 4: Pokročilá analýza
     with tab4:
-        st.header("🔬 Pokročilá analýza")
+        st.header("🔬 Analýza rizik")
         
         st.info("""
         **Dostupné analytické nástroje:**
@@ -664,12 +664,7 @@ def main():
         • **🔬 Pokročilá analýza** - Simulace záplav a geografická analýza
         • **📊 Real-time monitoring** - Aktuální data z různých zdrojů
         
-        ### 💼 Praktické využití
         
-        • **Identifikace rizikových oblastí** - Monitoring záplav a dopravních problémů
-        • **Hodnocení dodavatelů** - Analýza rizik podle lokace a kategorie
-        • **Preventivní opatření** - Včasné varování před možnými problémy
-        • **Strategické plánování** - Výběr bezpečných lokalit pro nové dodavatele
         
         ### 🔍 Filtry a jejich význam
         
@@ -687,7 +682,7 @@ def main():
         
         ### 📈 Vývoj
         
-        Aplikace je neustále vyvíjena a vylepšována na základě zpětné vazby a nových požadavků.
+        Aplikace byla vyvinuta jako demonstrace technických dovedností při přípravě na pohovor.
         """)
         
         st.markdown("---")

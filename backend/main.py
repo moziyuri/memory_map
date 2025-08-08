@@ -1,15 +1,4 @@
 """
-MemoryMap Backend API
-
-Tento modul poskytuje REST API pro aplikaci MemoryMap, která umožňuje ukládání a správu
-geograficky umístěných vzpomínek. Součást projektu vytvořeného pro demonstraci
-technických dovedností při přípravě na pohovor.
-
-Hlavní funkce:
-- Správa vzpomínek s geografickou lokací
-- Fulltextové vyhledávání ve vzpomínkách
-- Prostorové dotazy pro okolní místa
-
 Autor: Vytvořeno jako ukázka dovedností pro pohovor.
 """
 
@@ -27,6 +16,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from datetime import datetime
+from functools import lru_cache
 
 load_dotenv()
 
@@ -46,6 +36,73 @@ def get_http_session() -> requests.Session:
     return session
 
 http_session = get_http_session()
+
+# =============================
+# Geocoding helpers (Nominatim)
+# =============================
+
+ENABLE_GEOCODING = os.getenv('ENABLE_GEOCODING', 'true').lower() in ('1', 'true', 'yes')
+
+@lru_cache(maxsize=512)
+def geocode_cz(place_query: str):
+    if not ENABLE_GEOCODING:
+        return None
+    try:
+        resp = http_session.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={
+                'q': place_query,
+                'countrycodes': 'cz',
+                'format': 'json',
+                'limit': 1
+            },
+            headers={
+                'User-Agent': 'Risk-Analyst/1.0 (contact: app@example.com)'
+            },
+            timeout=10
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and data:
+                item = data[0]
+                lat = float(item.get('lat'))
+                lon = float(item.get('lon'))
+                return lat, lon
+        return None
+    except Exception:
+        return None
+
+def get_river_centroid(river_name: str):
+    """Vrátí centroid řeky z tabulky rivers, jinak None."""
+    conn = None
+    try:
+        conn = get_risk_db()
+        if not conn:
+            return None
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 
+                  ST_Y(ST_Centroid(geometry)) AS lat,
+                  ST_X(ST_Centroid(geometry)) AS lon
+                FROM rivers
+                WHERE lower(name) = lower(%s)
+                LIMIT 1
+                """,
+                [river_name]
+            )
+            row = cur.fetchone()
+            if row:
+                return float(row[0]), float(row[1])
+            return None
+    except Exception:
+        return None
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 # Vytvoření FastAPI aplikace s vlastním názvem
 app = FastAPI(title="MemoryMap API")
@@ -1526,41 +1583,67 @@ def extract_chmi_warnings_from_html(data: str, source_url: str) -> List[Dict]:
     try:
         # Hledáme skutečné výstrahy v HTML
         import re
+        text = data.lower()
+
+        # 1) Pokud je v textu výslovně "normální stav" a není zmínka o SPA/ohrožení/pohotovosti/bdělosti, nevracíme nic
+        danger_markers = ["ohrožení", "pohotovost", "bdělost", "spa 1", "spa 2", "spa 3", "povodň"]
+        if "normální stav" in text and not any(m in text for m in danger_markers):
+            return []
+
+        # 2) Určení závažnosti podle výskytu stavů SPA/ohrožení/pohotovost/bdělost
+        severity = None
+        if any(p in text for p in ["ohrožení", "spa 3", "spa3"]):
+            severity = "critical"
+        elif any(p in text for p in ["pohotovost", "spa 2", "spa2"]):
+            severity = "high"
+        elif any(p in text for p in ["bdělost", "spa 1", "spa1"]):
+            severity = "medium"
+
+        # Pokud nemáme závažnost (nikde nic z výše uvedeného), považujme to za bezvýznamné
+        if severity is None:
+            return []
+
+        # 3) Pokusíme se získat konkrétní řeku a stanici
+        river = None
+        station = None
+        m_river = re.search(r"tok\s*:?\s*([A-Za-zÁ-Žá-ž \-]+)", data, re.IGNORECASE)
+        if m_river:
+            river = m_river.group(1).strip()
+        m_station = re.search(r"název\s+stanice\s*:?\s*([A-Za-zÁ-Žá-ž \-]+)", data, re.IGNORECASE)
+        if m_station:
+            station = m_station.group(1).strip()
+
+        # 4) Lokalizace: priorita – (stanice+řeka) geokódování → známá města → centroid řeky → nic
+        lat = lon = None
+        if station and river:
+            geo = geocode_cz(f"{station} {river} Czech Republic")
+            if geo:
+                lat, lon = geo
+        if (lat is None or lon is None) and station:
+            geo = geocode_cz(f"{station} Czech Republic")
+            if geo:
+                lat, lon = geo
+        if (lat is None or lon is None) and river:
+            center = get_river_centroid(river)
+            if center:
+                lat, lon = center
+
+        # 5) Pokud stále nemáme validní souřadnice, nic nevracíme – raději žádná než špatná data
+        if lat is None or lon is None:
+            return []
+
+        events.append({
+            "title": f"CHMI povodňová výstraha – {river or 'neurčeno'} ({station or 'bez stanice'})",
+            "description": f"Stav: {severity.upper()}, zdroj: {source_url}",
+            "latitude": float(lat),
+            "longitude": float(lon),
+            "event_type": "flood",
+            "severity": severity,
+            "source": "chmi_api",
+            "url": source_url
+        })
         
-        # Hledáme výstrahy o povodních
-        flood_patterns = [
-            r'povodňová výstraha',
-            r'záplavová výstraha', 
-            r'hydrologická výstraha',
-            r'výstraha.*povodn',
-            r'výstraha.*záplav',
-            r'vltava.*výstraha',
-            r'morava.*výstraha',
-            r'labe.*výstraha',
-            r'ohře.*výstraha',
-            r'berounka.*výstraha',
-            r'vodní.*stav.*výstraha',
-            r'hladina.*výstraha',
-            r'přetečení.*výstraha',
-            r'zaplavení.*výstraha'
-        ]
-        
-        for pattern in flood_patterns:
-            matches = re.findall(pattern, data, re.IGNORECASE)
-            for match in matches:
-                event = {
-                    "title": f"CHMI výstraha - {match}",
-                    "description": f"CHMI vydalo výstrahu: {match}. Zdroj: {source_url}",
-                    "latitude": 49.8,
-                    "longitude": 15.5,
-                    "event_type": "flood",
-                    "severity": "high",
-                    "source": "chmi_api",
-                    "url": source_url
-                }
-                events.append(event)
-        
-        # Hledáme meteorologické výstrahy
+        # Meteorologické výstrahy – přidáme jen pokud text výslovně obsahuje termíny a dokážeme určit lokaci
         weather_patterns = [
             r'meteorologická výstraha',
             r'výstraha.*počasí',
@@ -1573,20 +1656,33 @@ def extract_chmi_warnings_from_html(data: str, source_url: str) -> List[Dict]:
             r'vítr.*výstraha'
         ]
         
-        for pattern in weather_patterns:
-            matches = re.findall(pattern, data, re.IGNORECASE)
-            for match in matches:
-                event = {
-                    "title": f"CHMI meteorologická výstraha - {match}",
-                    "description": f"CHMI vydalo meteorologickou výstrahu: {match}. Zdroj: {source_url}",
-                    "latitude": 49.8,
-                    "longitude": 15.5,
+        weather_hit = any(re.search(p, data, re.IGNORECASE) for p in weather_patterns)
+        if weather_hit:
+            # pokus o stanici/řeku → geokód → centroid řeky
+            wlat = wlon = None
+            if station and river:
+                geo = geocode_cz(f"{station} {river} Czech Republic")
+                if geo:
+                    wlat, wlon = geo
+            if (wlat is None or wlon is None) and station:
+                geo = geocode_cz(f"{station} Czech Republic")
+                if geo:
+                    wlat, wlon = geo
+            if (wlat is None or wlon is None) and river:
+                center = get_river_centroid(river)
+                if center:
+                    wlat, wlon = center
+            if wlat is not None and wlon is not None:
+                events.append({
+                    "title": "CHMI meteorologická výstraha",
+                    "description": f"Zdroj: {source_url}",
+                    "latitude": float(wlat),
+                    "longitude": float(wlon),
                     "event_type": "weather",
                     "severity": "medium",
                     "source": "chmi_api",
                     "url": source_url
-                }
-                events.append(event)
+                })
         
         # Hledáme konkrétní lokace v textu
         location_patterns = [
@@ -2097,7 +2193,7 @@ def create_rss_event(title: str, description: str, event_type: str, keyword: str
         'flood': 'high'
     }
     
-    # Mapování na lokace podle klíčových slov
+    # Mapování na lokace podle klíčových slov (může být doplněno geokódováním)
     location_mapping = {
         'praha': (50.0755, 14.4378),
         'brno': (49.1951, 16.6068),
@@ -2132,7 +2228,25 @@ def create_rss_event(title: str, description: str, event_type: str, keyword: str
                 latitude, longitude = coords
                 break
     
-    # Pokud jsme nedokázali najít polohu, událost nevracíme
+    # Pokud jsme nedokázali najít polohu, zkusíme geokódování běžných výrazů v CZ
+    if (latitude is None or longitude is None) and ENABLE_GEOCODING:
+        for token in [
+            'Praha','Brno','Ostrava','Plzeň','Liberec','Olomouc','České Budějovice','Hradec Králové','Pardubice','Zlín','Karlovy Vary','Ústí nad Labem'
+        ]:
+            if token.lower() in (title + ' ' + (description or '')).lower():
+                geo = geocode_cz(token)
+                if geo:
+                    latitude, longitude = geo
+                    break
+    # Pokud stále nic, zkusíme konkrétní řeky → centroid z DB
+    if (latitude is None or longitude is None):
+        for river in ['Vltava','Labe','Morava','Ohře','Berounka']:
+            if river.lower() in (title + ' ' + (description or '')).lower():
+                centroid = get_river_centroid(river)
+                if centroid:
+                    latitude, longitude = centroid
+                    break
+    # Pokud stále nemáme pozici, událost nevracíme (raději žádná než špatná)
     if latitude is None or longitude is None:
         return None
 
@@ -2548,7 +2662,7 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
         with conn.cursor() as cur:
             # Zkusíme použít PostGIS funkci
             try:
-                cur.execute("SELECT analyze_flood_risk_from_rivers(%s, %s, %s)", (lat, lon, flood_level_m))
+                cur.execute("SELECT analyze_flood_risk_from_rivers(%s, %s)", (lat, lon))
                 result = cur.fetchone()
                 if result and result[0] is not None:
                     out = result[0]
