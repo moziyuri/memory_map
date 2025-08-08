@@ -24,12 +24,62 @@ from psycopg2.extras import RealDictCursor
 import json
 import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from datetime import datetime
 
 load_dotenv()
 
+# Resilient HTTP session with retries
+def get_http_session() -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=0.5,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET", "POST"],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+http_session = get_http_session()
+
 # Vytvoření FastAPI aplikace s vlastním názvem
 app = FastAPI(title="MemoryMap API")
+
+# Startup DB checks
+@app.on_event("startup")
+async def startup_checks():
+    try:
+        conn = get_risk_db()
+        if not conn:
+            print("⚠️ DB check: Nelze získat připojení k DB (RISK_DATABASE_URL chybí nebo selhalo připojení)")
+            return
+        with conn.cursor() as cur:
+            # Tabulky
+            cur.execute("""
+                SELECT to_regclass('public.risk_events') IS NOT NULL,
+                       to_regclass('public.vw_suppliers') IS NOT NULL
+            """)
+            re_exists, sup_exists = cur.fetchone()
+            if not re_exists:
+                print("⚠️ DB check: Tabulka risk_events neexistuje")
+            if not sup_exists:
+                print("⚠️ DB check: Tabulka vw_suppliers neexistuje")
+            # Funkce (volitelně)
+            try:
+                cur.execute("SELECT proname FROM pg_proc WHERE proname = 'calculate_risk_in_radius'")
+                has_calc = cur.fetchone() is not None
+                if not has_calc:
+                    print("ℹ️ DB check: Funkce calculate_risk_in_radius není k dispozici (neblokuje provoz)")
+            except Exception:
+                print("ℹ️ DB check: Kontrola funkce calculate_risk_in_radius selhala (neblokuje provoz)")
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ DB startup check selhal: {e}")
 
 # Konfigurace CORS - BEZPEČNOSTNÍ OPRAVA
 app.add_middleware(
@@ -1218,7 +1268,7 @@ async def scrape_chmi_floods():
         for endpoint in chmi_endpoints:
             try:
                 print(f"🌊 Testuji CHMI endpoint: {endpoint}")
-                response = requests.get(endpoint, timeout=30)
+                response = http_session.get(endpoint, timeout=30)
                 
                 if response.status_code == 200:
                     print(f"✅ Úspěšné připojení k: {endpoint}")
@@ -1351,7 +1401,7 @@ async def scrape_openmeteo_weather():
         for city in czech_cities:
             try:
                 url = f"https://api.open-meteo.com/v1/forecast?latitude={city['lat']}&longitude={city['lon']}&current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m&timezone=auto"
-                response = requests.get(url, timeout=10)
+                response = http_session.get(url, timeout=10)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -1832,7 +1882,7 @@ async def scrape_rss_feeds():
         for feed_url in rss_feeds:
             try:
                 print(f"📰 Zpracovávám RSS feed: {feed_url}")
-                response = requests.get(feed_url, timeout=30)
+                response = http_session.get(feed_url, timeout=30)
                 
                 if response.status_code == 200:
                     print(f"✅ Úspěšné připojení k: {feed_url}")
@@ -2196,7 +2246,7 @@ async def test_chmi_endpoints():
     
     for endpoint in chmi_endpoints:
         try:
-            response = requests.get(endpoint, timeout=10)
+            response = http_session.get(endpoint, timeout=10)
             results[endpoint] = {
                 "status_code": response.status_code,
                 "content_length": len(response.text),
@@ -2751,7 +2801,7 @@ async def test_openmeteo_api():
         
         # Test pro Prahu
         url = "https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m&timezone=auto"
-        response = requests.get(url, timeout=10)
+        response = http_session.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
