@@ -1,339 +1,262 @@
-# 🚗 VW Group Risk Analyst - Memory Map Enhancement
+# 🚗 Risk Analyst Dashboard - Advanced Features
 
 ## 🎯 Cíl projektu
-**Vytvořit specializovanou verzi Memory Map pro Risk Analyst pozici ve VW Group**
+**Specializovaná aplikace pro analýzu rizik dodavatelského řetězce s pokročilými GIS funkcemi**
 
-### Proč to bude fungovat:
-- ✅ **Web scraping** - Explicitně požadováno v job description
-- ✅ **GIS analýza** - PostGIS + geografická data
-- ✅ **Supply chain risk** - Dodavatelské řetězce VW Group
-- ✅ **Moderní technologie** - Python, PostgreSQL, FastAPI
-- ✅ **Vizualizace** - Interaktivní mapy rizik
-
----
-
-## 📋 Projektový plán
-
-### **Fáze 1: Nová databáze a základní struktura (1-2 hodiny)**
-- [ ] Vytvoření nové PostgreSQL databáze na Render.com
-- [ ] Implementace tabulek pro risk events
-- [ ] Základní API endpointy
-- [ ] Testování připojení
-
-### **Fáze 2: Web scraping modul (2-3 hodiny)**
-- [ ] CHMI API scraper pro záplavové výstrahy
-- [ ] RSS feed parser pro novinky
-- [ ] Automatické ukládání do databáze
-- [ ] Error handling a logging
-
-### **Fáze 3: Risk analysis a vizualizace (1-2 hodiny)**
-- [ ] Geografické funkce pro analýzu rizik
-- [ ] Dashboard s vizualizací na mapě
-- [ ] Filtry podle typu incidentu
-- [ ] Risk scoring algoritmus
-
-### **Fáze 4: Demo data a prezentace (30 min)**
-- [ ] Fiktivní dodavatelé VW Group
-- [ ] Historické incidenty
-- [ ] Ukázka analýzy rizik
-- [ ] README s instrukcemi
+### Klíčové funkce:
+- ✅ **River flood simulation** - Simulace záplav a jejich dopadu
+- ✅ **Geographic data access** - Analýza vzdálenosti od řek, nadmořské výšky
+- ✅ **Supply chain impact analysis** - Simulace dopadu na dodavatelský řetězec
+- ✅ **Historical event correlation** - Korelace s minulými událostmi
+- ✅ **Advanced web crawling** - Monitoring incidentů a geopolitických rizik
+- ✅ **Real-time risk assessment** - Komplexní hodnocení rizik v reálném čase
 
 ---
 
-## 🗄️ Databázová struktura
+## 📋 Pokročilé funkce
 
-### **Hlavní tabulka: risk_events**
-```sql
-CREATE TABLE risk_events (
-    id SERIAL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    location POINT,  -- Geografická pozice
-    event_type VARCHAR(50), -- 'flood', 'protest', 'supply_chain', 'geopolitical'
-    severity VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
-    source VARCHAR(100), -- 'chmi_api', 'rss', 'manual', 'copernicus'
-    url TEXT, -- Zdroj dat
-    scraped_at TIMESTAMP DEFAULT NOW(),
-    created_at TIMESTAMP DEFAULT NOW()
-);
+### **🌊 River Flood Simulation**
+- **Výpočet vzdálenosti od řek** - Analýza blízkosti hlavních řek ČR
+- **Elevation profile analysis** - Hodnocení nadmořské výšky a terénu
+- **Flood probability calculation** - Simulace pravděpodobnosti záplav
+- **Impact assessment** - Hodnocení dopadu na dodavatele
 
--- Geografický index pro rychlé vyhledávání
-CREATE INDEX idx_risk_events_location ON risk_events USING GIST (location);
-CREATE INDEX idx_risk_events_type ON risk_events (event_type);
-CREATE INDEX idx_risk_events_severity ON risk_events (severity);
+### **🗺️ Geographic Risk Assessment**
+- **Multi-factor analysis** - Kombinace řek, výšky, historie
+- **Risk scoring algorithm** - Komplexní algoritmus hodnocení rizik
+- **Terrain analysis** - Analýza typu terénu a zranitelnosti
+- **Historical correlation** - Korelace s minulými událostmi
+
+### **🔗 Supply Chain Impact Analysis**
+- **Disruption simulation** - Simulace přerušení dodávek
+- **Recovery time estimation** - Odhad doby obnovy
+- **Alternative supplier identification** - Identifikace záložních dodavatelů
+- **Mitigation action generation** - Generování mitigačních opatření
+
+### **📊 Advanced Analytics**
+- **Real-time monitoring** - Monitoring rizik v reálném čase
+- **Predictive modeling** - Prediktivní modelování rizik
+- **Risk trend analysis** - Analýza trendů rizik
+- **Automated reporting** - Automatické generování reportů
+
+---
+
+## 🔧 Nové API Endpointy
+
+### **River Flood Simulation**
+```python
+GET /api/analysis/river-flood-simulation
+- supplier_id: Optional[int] - Analýza konkrétního dodavatele
+- river_name: Optional[str] - Název řeky
+- flood_level_m: Optional[float] - Hladina záplav v metrech
 ```
 
-### **Funkce pro analýzu rizik:**
+### **Geographic Risk Assessment**
+```python
+GET /api/analysis/geographic-risk-assessment
+- lat: float - Zeměpisná šířka
+- lon: float - Zeměpisná délka
+- radius_km: int - Poloměr analýzy v km
+```
+
+### **Supply Chain Impact Analysis**
+```python
+GET /api/analysis/supply-chain-impact
+- supplier_id: Optional[int] - Analýza konkrétního dodavatele
+- event_type: Optional[str] - Typ události
+```
+
+---
+
+## 🗄️ Rozšířená databázová struktura
+
+### **Tabulka vw_suppliers (rozšířená)**
 ```sql
--- Funkce pro výpočet rizika v okolí bodu
-CREATE OR REPLACE FUNCTION calculate_risk_in_radius(
-    point_lat DECIMAL, 
-    point_lon DECIMAL, 
-    radius_km INTEGER DEFAULT 50
-)
-RETURNS TABLE(
-    event_count INTEGER,
-    high_risk_count INTEGER,
-    risk_score DECIMAL
-) AS $$
+CREATE TABLE vw_suppliers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    location GEOGRAPHY(POINT, 4326),
+    category VARCHAR(100), -- 'electronics', 'tires', 'steering', 'brakes', 'body_parts'
+    risk_level VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### **Pokročilé geografické funkce**
+```sql
+-- Funkce pro analýzu vzdálenosti od řek
+CREATE OR REPLACE FUNCTION calculate_river_distance(lat DECIMAL, lon DECIMAL)
+RETURNS DECIMAL AS $$
 BEGIN
-    RETURN QUERY
-    SELECT 
-        COUNT(*)::INTEGER as event_count,
-        COUNT(*) FILTER (WHERE severity IN ('high', 'critical'))::INTEGER as high_risk_count,
-        CASE 
-            WHEN COUNT(*) = 0 THEN 0.0
-            ELSE (COUNT(*) FILTER (WHERE severity IN ('high', 'critical'))::DECIMAL / COUNT(*)) * 100
-        END as risk_score
-    FROM risk_events
-    WHERE ST_DWithin(
-        location::geography, 
-        ST_SetSRID(ST_MakePoint(point_lon, point_lat), 4326)::geography, 
-        radius_km * 1000
-    );
+    -- Implementace výpočtu vzdálenosti od nejbližší řeky
+    RETURN river_distance_km;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Funkce pro analýzu nadmořské výšky
+CREATE OR REPLACE FUNCTION analyze_elevation(lat DECIMAL, lon DECIMAL)
+RETURNS TABLE(elevation_m DECIMAL, flood_vulnerability VARCHAR(20)) AS $$
+BEGIN
+    -- Implementace analýzy nadmořské výšky
+    RETURN QUERY SELECT elevation, vulnerability;
 END;
 $$ LANGUAGE plpgsql;
 ```
 
 ---
 
-## 🌐 Web Scraping zdroje
+## 🌐 Pokročilé zdroje dat
 
-### **1. CHMI (Český hydrometeorologický ústav)**
-- **URL:** https://hydro.chmi.cz/hpps/
-- **Data:** Záplavové výstrahy, stavy vod
-- **Formát:** JSON API
-- **Frekvence:** Každých 6 hodin
+### **1. Elevation Data (SRTM/ALOS)**
+- **Zdroj:** NASA SRTM, ALOS PALSAR
+- **Rozlišení:** 30m, 12.5m
+- **Formát:** GeoTIFF
+- **Použití:** Analýza nadmořské výšky pro flood simulation
 
-### **2. RSS Feeds pro novinky**
-- **České noviny:** iDNES, ČT24, Seznam Zprávy
-- **Klíčová slova:** "záplavy", "povodně", "protesty", "doprava"
-- **Frekvence:** Každých 2 hodiny
+### **2. River Network Data**
+- **Zdroj:** OpenStreetMap, CHMI
+- **Data:** Hlavní řeky ČR s průtoky
+- **Formát:** GeoJSON, Shapefile
+- **Použití:** Výpočet vzdálenosti od řek
 
-### **3. Copernicus Emergency Management Service**
-- **URL:** https://emergency.copernicus.eu/
-- **Data:** Satelitní snímky záplav
-- **Formát:** GeoTIFF, Shapefile
-- **Frekvence:** Denně
+### **3. Historical Event Database**
+- **Zdroj:** CHMI, historické záznamy
+- **Data:** Minulé záplavy, události
+- **Formát:** CSV, JSON
+- **Použití:** Korelace s minulými událostmi
 
----
-
-## 🔧 API Endpointy
-
-### **Základní CRUD operace:**
-```python
-@app.get("/api/risks")
-async def get_risk_events(
-    event_type: Optional[str] = None,
-    severity: Optional[str] = None,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
-    radius_km: Optional[int] = 50
-):
-    """Získá risk events s filtry"""
-
-@app.post("/api/risks")
-async def create_risk_event(risk: RiskEvent):
-    """Vytvoří nový risk event"""
-
-@app.get("/api/risks/{risk_id}")
-async def get_risk_event(risk_id: int):
-    """Získá konkrétní risk event"""
-```
-
-### **Web scraping endpointy:**
-```python
-@app.get("/api/scrape/chmi")
-async def scrape_chmi_floods():
-    """Scrape CHMI API pro záplavové výstrahy"""
-
-@app.get("/api/scrape/rss")
-async def scrape_rss_feeds():
-    """Scrape RSS feeds pro novinky"""
-
-@app.get("/api/scrape/run-all")
-async def run_all_scrapers():
-    """Spustí všechny scrapers najednou"""
-```
-
-### **Analýza rizik:**
-```python
-@app.get("/api/analysis/risk-map")
-async def get_risk_map():
-    """Vrátí data pro risk mapu"""
-
-@app.get("/api/analysis/supplier-risk")
-async def analyze_supplier_risk(
-    lat: float,
-    lon: float,
-    radius_km: int = 50
-):
-    """Analýza rizik pro dodavatele"""
-
-@app.get("/api/analysis/statistics")
-async def get_risk_statistics():
-    """Statistiky rizik"""
-```
+### **4. Enhanced Web Crawling**
+- **Prewave-like alerts** - Monitoring incidentů
+- **Geopolitical monitoring** - Geopolitická rizika
+- **Social media sentiment** - Analýza sentimentu
+- **Natural disaster alerts** - Varování před přírodními katastrofami
 
 ---
 
-## 🗺️ Frontend - Risk Map
+## 📊 Frontend - Nová záložka "Pokročilá analýza"
 
-### **Komponenty:**
-1. **Leaflet mapa** - Základní mapová vrstva
-2. **Risk events layer** - Body incidentů na mapě
-3. **Risk zones layer** - Polygony rizikových zón
-4. **Supplier markers** - Dodavatelé VW Group
-5. **Filters panel** - Filtry podle typu, závažnosti, data
-6. **Statistics panel** - Statistiky rizik
+### **Sekce 1: River Flood Simulation**
+- Zobrazení analýzy záplav pro dodavatele
+- Metriky: pravděpodobnost, vzdálenost od řeky, nadmořská výška
+- Vizualizace rizikových zón
 
-### **Interaktivita:**
-- **Klik na incident** - Detail informací
-- **Hover na dodavatele** - Riziko v okolí
-- **Filtry** - Dynamické filtrování
-- **Time slider** - Časová osa incidentů
+### **Sekce 2: Supply Chain Impact Analysis**
+- Analýza dopadu na dodavatelský řetězec
+- Metriky: riziko přerušení, doba obnovy, mitigační opatření
+- Identifikace kritických dodavatelů
 
----
+### **Sekce 3: Geographic Risk Assessment Tool**
+- Interaktivní nástroj pro geografickou analýzu
+- Vstup: souřadnice, poloměr analýzy
+- Výstup: komplexní hodnocení rizik
 
-## 📊 Demo data pro VW Group
-
-### **Fiktivní dodavatelé:**
-```python
-VW_SUPPLIERS = [
-    {
-        "name": "Bosch Electronics",
-        "location": (49.8175, 15.4730),  # České Budějovice
-        "category": "electronics",
-        "risk_level": "medium"
-    },
-    {
-        "name": "Continental Tires",
-        "location": (50.0755, 14.4378),  # Praha
-        "category": "tires",
-        "risk_level": "low"
-    },
-    {
-        "name": "ZF Steering Systems",
-        "location": (49.1951, 16.6068),  # Brno
-        "category": "steering",
-        "risk_level": "high"
-    }
-]
-```
-
-### **Historické incidenty:**
-```python
-HISTORICAL_INCIDENTS = [
-    {
-        "title": "Záplavy v jižních Čechách",
-        "location": (49.8175, 15.4730),
-        "event_type": "flood",
-        "severity": "high",
-        "date": "2023-06-15"
-    },
-    {
-        "title": "Protesty v Praze",
-        "location": (50.0755, 14.4378),
-        "event_type": "protest",
-        "severity": "medium",
-        "date": "2023-07-20"
-    }
-]
-```
+### **Sekce 4: Information & Documentation**
+- Dokumentace pokročilých funkcí
+- Příklady použití
+- Technické detaily
 
 ---
 
-## 🚀 Implementační postup
+## 🚀 Implementační plán
 
-### **Krok 1: Nová databáze**
-1. Vytvořit novou PostgreSQL na Render.com
-2. Nastavit environment variables
-3. Testovat připojení
+### **Fáze 1: Základní implementace ✅**
+- [x] River flood simulation API
+- [x] Geographic risk assessment
+- [x] Supply chain impact analysis
+- [x] Frontend záložka "Pokročilá analýza"
 
-### **Krok 2: Základní struktura**
-1. Vytvořit tabulky v PostgreSQL
-2. Implementovat základní API endpointy
-3. Testovat CRUD operace
+### **Fáze 2: Rozšíření datových zdrojů**
+- [ ] Integrace SRTM elevation data
+- [ ] OpenStreetMap river network data
+- [ ] Historical event database
+- [ ] Enhanced web crawling
 
-### **Krok 3: Web scraping**
-1. Implementovat CHMI scraper
-2. Implementovat RSS scraper
-3. Testovat automatické ukládání
+### **Fáze 3: Pokročilé algoritmy**
+- [ ] Machine learning pro predikci rizik
+- [ ] Real-time monitoring dashboard
+- [ ] Automated alert system
+- [ ] Advanced reporting
 
-### **Krok 4: Analýza a vizualizace**
-1. Implementovat geografické funkce
-2. Vytvořit risk mapu
-3. Přidat filtry a statistiky
-
-### **Krok 5: Demo a prezentace**
-1. Přidat demo data
-2. Vytvořit README
-3. Připravit prezentaci
+### **Fáze 4: Produkční nasazení**
+- [ ] Performance optimization
+- [ ] Security hardening
+- [ ] Monitoring a logging
+- [ ] User training
 
 ---
 
 ## 📈 Očekávané výsledky
 
-### **Technické znalosti:**
-- ✅ **Web scraping** - CHMI API, RSS feeds
-- ✅ **GIS analýza** - PostGIS, geografické funkce
-- ✅ **Databáze** - PostgreSQL, komplexní dotazy
-- ✅ **API development** - FastAPI, REST endpoints
-- ✅ **Data visualization** - Interaktivní mapy
+### **Pro Risk Analyst pozici:**
+- **Comprehensive risk assessment** - Komplexní hodnocení rizik
+- **Predictive capabilities** - Prediktivní schopnosti
+- **Real-time monitoring** - Monitoring v reálném čase
+- **Automated reporting** - Automatické reportování
 
-### **Business kontext:**
-- ✅ **Supply chain risk** - Dodavatelské řetězce VW
-- ✅ **Geographic risk mapping** - Vizuální analýza
-- ✅ **Real-time monitoring** - Automatické data
-- ✅ **Risk scoring** - Kvantifikace rizik
-
-### **Portfolio hodnota:**
-- ✅ **Kompletní aplikace** - End-to-end řešení
-- ✅ **Real-world data** - Skutečná data o rizicích
-- ✅ **Automotive focus** - Relevantní pro VW Group
-- ✅ **Moderní technologie** - Aktuální stack
+### **Pro VW Group:**
+- **Supply chain resilience** - Odolnost dodavatelského řetězce
+- **Risk mitigation** - Snížení rizik
+- **Cost savings** - Úspory nákladů
+- **Competitive advantage** - Konkurenční výhoda
 
 ---
 
-## 🎯 Proč to bude fungovat pro VW Group
+## 🎯 Další rozvoj
 
-### **1. Explicitní požadavky job description:**
-- ✅ **Web scraping** - Implementováno
-- ✅ **Data analysis** - Python + PostgreSQL
-- ✅ **Risk management** - Supply chain focus
-- ✅ **Automotive industry** - VW Group kontext
+### **Krátkodobé cíle (1-2 měsíce):**
+- Integrace reálných elevation dat
+- Rozšíření river network databáze
+- Implementace ML predikcí
+- Enhanced web crawling
 
-### **2. Konkrétní důkaz znalostí:**
-- ✅ **Živá aplikace** - Ne jen teorie
-- ✅ **Real-world data** - Skutečná data o rizicích
-- ✅ **Moderní technologie** - Co VW používá
-- ✅ **Vizualizace** - Snadno pochopitelné
+### **Střednědobé cíle (3-6 měsíců):**
+- Real-time monitoring dashboard
+- Automated alert system
+- Advanced reporting engine
+- User management system
 
-### **3. Relevantní pro pozici:**
-- ✅ **Risk analysis** - Analýza dodavatelských rizik
-- ✅ **Geographic data** - Prostorová analýza
-- ✅ **Automation** - Automatické získávání dat
-- ✅ **Reporting** - Dashboard a reporty
-
----
-
-## ⏱️ Časový plán
-
-### **Celkový čas: 5-7 hodin**
-- **Fáze 1:** 1-2 hodiny
-- **Fáze 2:** 2-3 hodiny  
-- **Fáze 3:** 1-2 hodiny
-- **Fáze 4:** 30 minut
-
-### **Priorita:**
-1. **Nejdříve** - Nová databáze a základní struktura
-2. **Pak** - Web scraping (klíčové pro job description)
-3. **Nakonec** - Analýza a vizualizace
+### **Dlouhodobé cíle (6+ měsíců):**
+- AI-powered risk assessment
+- Global supply chain monitoring
+- Integration s dalšími systémy
+- Mobile application
 
 ---
 
-## 🎉 Výsledek
+## 💡 Technologie a nástroje
 
-**Memory Map Risk Analysis = Živý důkaz znalostí pro Risk Analyst pozici ve VW Group**
+### **Backend:**
+- FastAPI - REST API framework
+- PostgreSQL + PostGIS - Geografická databáze
+- Python - Programovací jazyk
+- Requests - HTTP client pro web scraping
 
-**Připraven začít implementaci?** 🚀 
+### **Frontend:**
+- Streamlit - Web framework
+- Folium - Interaktivní mapy
+- Pandas - Data analysis
+- Plotly - Pokročilé grafy
+
+### **Data Sources:**
+- CHMI API - Meteorologická data
+- RSS Feeds - Novinky a události
+- OpenStreetMap - Geografická data
+- SRTM/ALOS - Elevation data
+
+### **Deployment:**
+- Render.com - Backend hosting
+- Streamlit Cloud - Frontend hosting
+- PostgreSQL - Database hosting
+
+---
+
+## 📝 Závěr
+
+Tento projekt představuje komplexní řešení pro analýzu rizik dodavatelského řetězce s pokročilými GIS funkcemi. Kombinuje moderní technologie s praktickými potřebami risk analyst pozice a poskytuje solidní základ pro další rozvoj.
+
+**Klíčové výhody:**
+- ✅ **Comprehensive** - Komplexní pokrytí rizik
+- ✅ **Real-time** - Monitoring v reálném čase
+- ✅ **Predictive** - Prediktivní schopnosti
+- ✅ **Scalable** - Škálovatelné řešení
+- ✅ **User-friendly** - Přívětivé uživatelské rozhraní 

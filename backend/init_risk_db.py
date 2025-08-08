@@ -132,76 +132,56 @@ def init_risk_db():
         """)
         print("✅ Funkce calculate_risk_in_radius vytvořena")
         
-        # 5. Vložení demo dat
-        print("📝 Vkládám demo data...")
+        # 5. Databáze je připravena pro reálná data
+        print("📝 Databáze je připravena pro reálná data z web scrapingu...")
         
-        # Demo risk events
-        demo_events = [
-            ("Záplavy v jižních Čechách", "Silné deště způsobily záplavy v jižních Čechách", 49.0, 14.5, "flood", "high", "chmi_api"),
-            ("Protesty v Praze", "Demonstrace proti vládním opatřením", 50.0755, 14.4378, "protest", "medium", "rss"),
-            ("Dopravní nehoda na D1", "Havárie kamionu blokuje dálnici D1", 49.8, 14.5, "supply_chain", "high", "manual"),
-            ("Politické napětí v regionu", "Eskalace politického napětí", 50.1, 14.4, "geopolitical", "medium", "rss"),
-            ("Povodně na Vltavě", "Vzestup hladiny Vltavy ohrožuje okolní oblasti", 49.2, 14.4, "flood", "critical", "chmi_api"),
-            ("Stávka dopravců", "Stávka dopravních společností", 50.0, 14.3, "supply_chain", "high", "rss"),
-            ("Extrémní počasí", "Silné bouřky a krupobití", 49.5, 14.6, "flood", "medium", "chmi_api"),
-            ("Problémy s dodávkami", "Opoždění dodávek komponentů", 50.2, 14.5, "supply_chain", "medium", "manual"),
-            ("Sociální nepokoje", "Demonstrace a nepokoje", 49.9, 14.4, "protest", "high", "rss")
+        # 6. Přidání ukázkových dodavatelů pro testování pokročilých funkcí
+        print("🏭 Přidávám ukázkové dodavatele pro testování...")
+        
+        sample_suppliers = [
+            # Kritičtí dodavatelé v rizikových oblastech
+            ("Bosch Electronics", 50.0755, 14.4378, "electronics", "critical"),  # Praha - blízko Vltavy
+            ("Continental Tires", 49.1951, 16.6068, "tires", "critical"),  # Brno - blízko Moravy
+            ("ZF Steering", 50.2092, 15.8327, "steering", "high"),  # Hradec Králové - blízko Labe
+            ("Brembo Brakes", 49.7475, 13.3776, "brakes", "high"),  # Plzeň - blízko Berounky
+            ("Magna Body Parts", 50.231, 12.880, "body_parts", "medium"),  # Karlovy Vary - blízko Ohře
+            
+            # Dodavatelé v bezpečnějších oblastech
+            ("Siemens Electronics", 50.7663, 15.0543, "electronics", "medium"),  # Liberec
+            ("Michelin Tires", 49.5938, 17.2507, "tires", "medium"),  # Olomouc
+            ("TRW Steering", 48.9745, 14.4747, "steering", "low"),  # České Budějovice
+            ("ATE Brakes", 50.0343, 15.7812, "brakes", "low"),  # Pardubice
+            ("Lear Body Parts", 49.2264, 17.6683, "body_parts", "low")  # Zlín
         ]
         
-        for event in demo_events:
-            cur.execute("""
-                INSERT INTO risk_events (title, description, location, event_type, severity, source)
-                VALUES (%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s)
-                ON CONFLICT DO NOTHING
-            """, event)
+        for supplier in sample_suppliers:
+            try:
+                cur.execute("""
+                    INSERT INTO vw_suppliers (name, location, category, risk_level)
+                    VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                """, supplier)
+            except Exception as e:
+                print(f"⚠️ Chyba při vkládání dodavatele {supplier[0]}: {str(e)}")
         
-        print(f"✅ Vloženo {len(demo_events)} demo risk events")
+        print(f"✅ Přidáno {len(sample_suppliers)} ukázkových dodavatelů")
         
-        # Demo dodavatelé
-        demo_suppliers = [
-            ("Bosch Electronics", 49.8, 14.4, "electronics", "medium"),
-            ("Continental Tires", 50.1, 14.5, "tires", "low"),
-            ("ZF Steering Systems", 49.9, 14.3, "steering", "high"),
-            ("Brembo Brakes", 50.2, 14.6, "brakes", "medium"),
-            ("Valeo Lighting", 49.7, 14.5, "electronics", "low"),
-            ("Michelin Tires", 50.0, 14.4, "tires", "medium"),
-            ("TRW Safety Systems", 49.6, 14.3, "safety", "high"),
-            ("Delphi Electronics", 50.3, 14.5, "electronics", "medium"),
-            ("Goodyear Tires", 49.5, 14.6, "tires", "low")
-        ]
-        
-        for supplier in demo_suppliers:
-            cur.execute("""
-                INSERT INTO vw_suppliers (name, location, category, risk_level)
-                VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
-                ON CONFLICT DO NOTHING
-            """, supplier)
-        
-        print(f"✅ Vloženo {len(demo_suppliers)} demo dodavatelů")
+        # 7. Potvrzení, že demo data již nejsou vkládána
+        print("📝 Demo data pro risk events již nejsou vkládána - pouze reálná data z web scrapingu")
+        print("📝 Demo data pro suppliers jsou vkládána pouze pro testování pokročilých funkcí")
         
         conn.commit()
-        print("✅ Všechny změny commitnuty!")
-        
-        # 6. Kontrola výsledku
-        cur.execute("SELECT COUNT(*) FROM risk_events")
-        events_count = cur.fetchone()[0]
-        
-        cur.execute("SELECT COUNT(*) FROM vw_suppliers")
-        suppliers_count = cur.fetchone()[0]
-        
-        print(f"📊 Finální stav:")
-        print(f"   - Risk events: {events_count}")
-        print(f"   - Suppliers: {suppliers_count}")
-        
-        conn.close()
-        print("🎉 Inicializace risk analyst databáze dokončena úspěšně!")
+        print("✅ Databáze úspěšně inicializována pro Risk Analyst Dashboard")
         return True
         
     except Exception as e:
-        print(f"❌ Chyba při inicializaci: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Chyba při inicializaci databáze: {str(e)}")
+        if conn:
+            conn.rollback()
         return False
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     print("=" * 50)

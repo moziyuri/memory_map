@@ -1173,9 +1173,9 @@ async def scrape_chmi_floods():
                 continue
         
         if not scraped_events:
-            print("⚠️ Žádný CHMI endpoint nefunguje, vytvářím fallback data")
-            # Fallback data pouze pokud žádný endpoint nefunguje
-            scraped_events = create_fallback_chmi_data()
+            print("⚠️ Žádný CHMI endpoint nefunguje, žádná data nebudou uložena")
+            # Není fallback data - vrátíme prázdný seznam
+            scraped_events = []
         
         # Uložíme events do databáze
         conn = None
@@ -1406,30 +1406,7 @@ def parse_chmi_html(data: str, source_url: str) -> List[Dict]:
     
     return events
 
-def create_fallback_chmi_data() -> List[Dict]:
-    """Vytvoří fallback data pouze pokud žádný endpoint nefunguje"""
-    return [
-        {
-            "title": "Záplavová výstraha - Jižní Čechy (fallback)",
-            "description": "CHMI vydalo záplavovou výstrahu pro Jižní Čechy kvůli silným dešťům",
-            "latitude": 49.0,
-            "longitude": 14.5,
-            "event_type": "flood",
-            "severity": "high",
-            "source": "chmi_api",
-            "url": "https://hydro.chmi.cz/hpps/"
-        },
-        {
-            "title": "Hydrologická výstraha - Vltava (fallback)",
-            "description": "Vzestup hladiny Vltavy v Praze a okolí",
-            "latitude": 50.0755,
-            "longitude": 14.4378,
-            "event_type": "flood",
-            "severity": "medium",
-            "source": "chmi_api",
-            "url": "https://hydro.chmi.cz/hpps/"
-        }
-    ]
+# Fallback data funkce byla odstraněna - aplikace funguje pouze s reálnými daty
 
 @app.get("/api/scrape/rss")
 async def scrape_rss_feeds():
@@ -1688,3 +1665,441 @@ async def debug_environment():
         "PORT": os.getenv('PORT', 'NOT_SET'),
         "message": "Environment variables debug"
     } 
+
+# ============================================================================
+# ADVANCED RISK ANALYSIS ENDPOINTS
+# ============================================================================
+
+@app.get("/api/analysis/river-flood-simulation")
+async def river_flood_simulation(
+    supplier_id: Optional[int] = None,
+    river_name: Optional[str] = None,
+    flood_level_m: Optional[float] = None
+):
+    """Simulace záplav a jejich dopadu na dodavatele"""
+    conn = None
+    try:
+        conn = next(get_risk_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Získání dat o řekách a dodavatelích
+            if supplier_id:
+                # Analýza konkrétního dodavatele
+                cur.execute("""
+                    SELECT name, category, risk_level,
+                           ST_X(location::geometry) as longitude,
+                           ST_Y(location::geometry) as latitude
+                    FROM vw_suppliers 
+                    WHERE id = %s
+                """, [supplier_id])
+                supplier = cur.fetchone()
+                
+                if not supplier:
+                    return {"error": "Dodavatel nenalezen"}
+                
+                # Simulace záplav pro danou lokaci
+                flood_risk = calculate_flood_risk(
+                    supplier['latitude'], 
+                    supplier['longitude'], 
+                    flood_level_m or 2.0
+                )
+                
+                return {
+                    "supplier": dict(supplier),
+                    "flood_simulation": flood_risk,
+                    "risk_assessment": {
+                        "flood_probability": flood_risk['probability'],
+                        "impact_level": flood_risk['impact_level'],
+                        "mitigation_needed": flood_risk['mitigation_needed']
+                    }
+                }
+            else:
+                # Analýza všech dodavatelů v rizikových oblastech
+                cur.execute("""
+                    SELECT id, name, category, risk_level,
+                           ST_X(location::geometry) as longitude,
+                           ST_Y(location::geometry) as latitude
+                    FROM vw_suppliers 
+                    WHERE risk_level IN ('high', 'critical')
+                    ORDER BY risk_level DESC
+                """)
+                suppliers = cur.fetchall()
+                
+                flood_analysis = []
+                for supplier in suppliers:
+                    flood_risk = calculate_flood_risk(
+                        supplier['latitude'], 
+                        supplier['longitude'], 
+                        flood_level_m or 2.0
+                    )
+                    flood_analysis.append({
+                        "supplier": dict(supplier),
+                        "flood_risk": flood_risk
+                    })
+                
+                return {
+                    "total_suppliers_analyzed": len(flood_analysis),
+                    "high_risk_suppliers": len([s for s in flood_analysis if s['flood_risk']['impact_level'] == 'high']),
+                    "flood_analysis": flood_analysis
+                }
+                
+    except Exception as e:
+        print(f"❌ Chyba při simulaci záplav: {str(e)}")
+        return {"error": f"Chyba při simulaci: {str(e)}"}
+    finally:
+        if conn:
+            conn.close()
+
+@app.get("/api/analysis/geographic-risk-assessment")
+async def geographic_risk_assessment(
+    lat: float,
+    lon: float,
+    radius_km: int = 50
+):
+    """Komplexní geografická analýza rizik pro danou lokaci"""
+    try:
+        # Analýza vzdálenosti od řek
+        river_analysis = analyze_river_proximity(lat, lon, radius_km)
+        
+        # Analýza nadmořské výšky
+        elevation_analysis = analyze_elevation_profile(lat, lon)
+        
+        # Analýza historických událostí
+        historical_analysis = analyze_historical_events(lat, lon, radius_km)
+        
+        # Kombinované hodnocení rizik
+        combined_risk = calculate_combined_risk(
+            river_analysis, 
+            elevation_analysis, 
+            historical_analysis
+        )
+        
+        return {
+            "location": {"latitude": lat, "longitude": lon},
+            "analysis_radius_km": radius_km,
+            "river_analysis": river_analysis,
+            "elevation_analysis": elevation_analysis,
+            "historical_analysis": historical_analysis,
+            "combined_risk_assessment": combined_risk
+        }
+        
+    except Exception as e:
+        print(f"❌ Chyba při geografické analýze: {str(e)}")
+        return {"error": f"Chyba při analýze: {str(e)}"}
+
+@app.get("/api/analysis/supply-chain-impact")
+async def supply_chain_impact_analysis(
+    supplier_id: Optional[int] = None,
+    event_type: Optional[str] = None
+):
+    """Analýza dopadu událostí na dodavatelský řetězec"""
+    conn = None
+    try:
+        conn = next(get_risk_db())
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if supplier_id:
+                # Analýza konkrétního dodavatele
+                cur.execute("""
+                    SELECT id, name, category, risk_level,
+                           ST_X(location::geometry) as longitude,
+                           ST_Y(location::geometry) as latitude
+                    FROM vw_suppliers 
+                    WHERE id = %s
+                """, [supplier_id])
+                supplier = cur.fetchone()
+                
+                if not supplier:
+                    return {"error": "Dodavatel nenalezen"}
+                
+                # Analýza rizikových událostí v okolí
+                cur.execute("""
+                    SELECT COUNT(*) as total_events,
+                           COUNT(*) FILTER (WHERE severity IN ('high', 'critical')) as high_risk_events,
+                           COUNT(*) FILTER (WHERE event_type = %s) as specific_type_events
+                    FROM risk_events
+                    WHERE ST_DWithin(
+                        location::geography,
+                        ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                        50 * 1000
+                    )
+                """, [event_type or 'flood', supplier['longitude'], supplier['latitude']])
+                
+                risk_stats = cur.fetchone()
+                
+                # Simulace dopadu na dodavatelský řetězec
+                impact_analysis = simulate_supply_chain_impact(
+                    supplier, risk_stats, event_type
+                )
+                
+                return {
+                    "supplier": dict(supplier),
+                    "risk_statistics": dict(risk_stats),
+                    "supply_chain_impact": impact_analysis
+                }
+            else:
+                # Analýza celého dodavatelského řetězce
+                cur.execute("""
+                    SELECT id, name, category, risk_level,
+                           ST_X(location::geometry) as longitude,
+                           ST_Y(location::geometry) as latitude
+                    FROM vw_suppliers
+                    ORDER BY risk_level DESC
+                """)
+                suppliers = cur.fetchall()
+                
+                chain_analysis = []
+                for supplier in suppliers:
+                    # Analýza rizik pro každého dodavatele
+                    cur.execute("""
+                        SELECT COUNT(*) as nearby_events,
+                               COUNT(*) FILTER (WHERE severity IN ('high', 'critical')) as critical_events
+                        FROM risk_events
+                        WHERE ST_DWithin(
+                            location::geography,
+                            ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                            50 * 1000
+                        )
+                    """, [supplier['longitude'], supplier['latitude']])
+                    
+                    risk_stats = cur.fetchone()
+                    impact = simulate_supply_chain_impact(
+                        supplier, risk_stats, event_type
+                    )
+                    
+                    chain_analysis.append({
+                        "supplier": dict(supplier),
+                        "risk_analysis": dict(risk_stats),
+                        "impact_assessment": impact
+                    })
+                
+                return {
+                    "total_suppliers": len(chain_analysis),
+                    "high_risk_suppliers": len([s for s in chain_analysis if s['supplier']['risk_level'] in ['high', 'critical']]),
+                    "supply_chain_analysis": chain_analysis
+                }
+                
+    except Exception as e:
+        print(f"❌ Chyba při analýze dodavatelského řetězce: {str(e)}")
+        return {"error": f"Chyba při analýze: {str(e)}"}
+    finally:
+        if conn:
+            conn.close()
+
+# ============================================================================
+# HELPER FUNCTIONS FOR ADVANCED ANALYSIS
+# ============================================================================
+
+def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
+    """Výpočet rizika záplav pro danou lokaci"""
+    # Simulace na základě nadmořské výšky a vzdálenosti od řek
+    base_elevation = 200  # Průměrná nadmořská výška ČR
+    river_distance = calculate_river_distance(lat, lon)
+    
+    # Výpočet pravděpodobnosti záplav
+    if river_distance < 1.0:  # Méně než 1km od řeky
+        probability = 0.8
+        impact_level = "critical"
+    elif river_distance < 5.0:  # 1-5km od řeky
+        probability = 0.6
+        impact_level = "high"
+    elif river_distance < 10.0:  # 5-10km od řeky
+        probability = 0.3
+        impact_level = "medium"
+    else:
+        probability = 0.1
+        impact_level = "low"
+    
+    # Úprava podle nadmořské výšky
+    if base_elevation < 150:
+        probability *= 1.5
+    elif base_elevation > 400:
+        probability *= 0.5
+    
+    return {
+        "probability": min(probability, 1.0),
+        "impact_level": impact_level,
+        "river_distance_km": river_distance,
+        "elevation_m": base_elevation,
+        "flood_level_m": flood_level_m,
+        "mitigation_needed": probability > 0.5
+    }
+
+def calculate_river_distance(lat: float, lon: float) -> float:
+    """Výpočet vzdálenosti od nejbližší řeky (simulace)"""
+    # Hlavní řeky ČR s přibližnými souřadnicemi
+    rivers = [
+        {"name": "Vltava", "lat": 50.0755, "lon": 14.4378},
+        {"name": "Labe", "lat": 50.2092, "lon": 15.8327},
+        {"name": "Morava", "lat": 49.1951, "lon": 16.6068},
+        {"name": "Ohře", "lat": 50.231, "lon": 12.880},
+        {"name": "Berounka", "lat": 49.7475, "lon": 13.3776}
+    ]
+    
+    min_distance = float('inf')
+    for river in rivers:
+        distance = ((lat - river['lat'])**2 + (lon - river['lon'])**2)**0.5
+        # Převod na km (přibližně)
+        distance_km = distance * 111
+        min_distance = min(min_distance, distance_km)
+    
+    return min_distance
+
+def analyze_river_proximity(lat: float, lon: float, radius_km: int) -> dict:
+    """Analýza blízkosti řek"""
+    river_distance = calculate_river_distance(lat, lon)
+    
+    return {
+        "nearest_river_distance_km": river_distance,
+        "flood_risk_zone": river_distance < 5.0,
+        "high_risk_zone": river_distance < 2.0,
+        "risk_level": "high" if river_distance < 5.0 else "medium" if river_distance < 10.0 else "low"
+    }
+
+def analyze_elevation_profile(lat: float, lon: float) -> dict:
+    """Analýza nadmořské výšky (simulace)"""
+    # Simulace nadmořské výšky na základě souřadnic
+    base_elevation = 200 + (lat - 50.0) * 100 + (lon - 14.0) * 50
+    
+    return {
+        "elevation_m": base_elevation,
+        "flood_vulnerability": "high" if base_elevation < 200 else "medium" if base_elevation < 300 else "low",
+        "terrain_type": "lowland" if base_elevation < 200 else "hills" if base_elevation < 400 else "mountains"
+    }
+
+def analyze_historical_events(lat: float, lon: float, radius_km: int) -> dict:
+    """Analýza historických událostí v okolí"""
+    # Simulace na základě lokace
+    historical_floods = 2 if lat < 50.0 else 1  # Jižní Čechy více náchylné
+    historical_protests = 1 if lon > 15.0 else 0  # Východní Čechy
+    
+    return {
+        "historical_flood_events": historical_floods,
+        "historical_protest_events": historical_protests,
+        "total_historical_events": historical_floods + historical_protests,
+        "risk_trend": "increasing" if historical_floods > 1 else "stable"
+    }
+
+def calculate_combined_risk(river_analysis: dict, elevation_analysis: dict, historical_analysis: dict) -> dict:
+    """Výpočet kombinovaného rizika"""
+    risk_score = 0
+    
+    # Riziko od řek
+    if river_analysis['risk_level'] == 'high':
+        risk_score += 40
+    elif river_analysis['risk_level'] == 'medium':
+        risk_score += 20
+    
+    # Riziko od nadmořské výšky
+    if elevation_analysis['flood_vulnerability'] == 'high':
+        risk_score += 30
+    elif elevation_analysis['flood_vulnerability'] == 'medium':
+        risk_score += 15
+    
+    # Riziko z historických událostí
+    if historical_analysis['total_historical_events'] > 2:
+        risk_score += 30
+    elif historical_analysis['total_historical_events'] > 0:
+        risk_score += 15
+    
+    # Celkové hodnocení
+    if risk_score >= 70:
+        overall_risk = "critical"
+    elif risk_score >= 50:
+        overall_risk = "high"
+    elif risk_score >= 30:
+        overall_risk = "medium"
+    else:
+        overall_risk = "low"
+    
+    return {
+        "risk_score": risk_score,
+        "overall_risk_level": overall_risk,
+        "risk_factors": {
+            "river_proximity": river_analysis['risk_level'],
+            "elevation_vulnerability": elevation_analysis['flood_vulnerability'],
+            "historical_events": historical_analysis['total_historical_events']
+        },
+        "recommendations": generate_risk_recommendations(overall_risk)
+    }
+
+def simulate_supply_chain_impact(supplier: dict, risk_stats: dict, event_type: str) -> dict:
+    """Simulace dopadu na dodavatelský řetězec"""
+    total_events = risk_stats['total_events'] or 0
+    critical_events = risk_stats['high_risk_events'] or 0
+    
+    # Výpočet rizika přerušení dodávek
+    disruption_probability = min(critical_events * 0.3, 0.9)
+    
+    # Dopad podle kategorie dodavatele
+    category_impact = {
+        'electronics': 'critical',
+        'tires': 'high',
+        'steering': 'high',
+        'brakes': 'critical',
+        'body_parts': 'medium'
+    }
+    
+    impact_level = category_impact.get(supplier['category'], 'medium')
+    
+    # Simulace času obnovy
+    recovery_time_days = {
+        'critical': 30,
+        'high': 14,
+        'medium': 7,
+        'low': 3
+    }
+    
+    return {
+        "disruption_probability": disruption_probability,
+        "impact_level": impact_level,
+        "estimated_recovery_days": recovery_time_days[impact_level],
+        "alternative_suppliers_needed": disruption_probability > 0.5,
+        "mitigation_actions": generate_mitigation_actions(impact_level, disruption_probability)
+    }
+
+def generate_risk_recommendations(risk_level: str) -> list:
+    """Generování doporučení na základě úrovně rizika"""
+    recommendations = {
+        'critical': [
+            "Okamžitě implementovat protipovodňová opatření",
+            "Vytvořit záložní dodavatelský řetězec",
+            "Přesunout výrobu do bezpečnější lokace",
+            "Instalovat monitoring hladiny vody"
+        ],
+        'high': [
+            "Implementovat protipovodňová opatření",
+            "Vytvořit plán evakuace",
+            "Zvýšit pojištění",
+            "Monitoring meteorologických podmínek"
+        ],
+        'medium': [
+            "Pravidelné kontroly bezpečnostních opatření",
+            "Aktualizace pojištění",
+            "Monitoring lokálních rizik"
+        ],
+        'low': [
+            "Standardní bezpečnostní opatření",
+            "Pravidelné kontroly"
+        ]
+    }
+    
+    return recommendations.get(risk_level, ["Standardní opatření"])
+
+def generate_mitigation_actions(impact_level: str, probability: float) -> list:
+    """Generování mitigačních opatření"""
+    actions = []
+    
+    if probability > 0.7:
+        actions.append("Okamžitě aktivovat záložní dodavatele")
+        actions.append("Přesunout kritickou výrobu")
+    
+    if impact_level in ['critical', 'high']:
+        actions.append("Zvýšit bezpečnostní zásoby")
+        actions.append("Implementovat monitoring dodavatelského řetězce")
+    
+    if probability > 0.5:
+        actions.append("Aktivovat krizový management")
+        actions.append("Komunikovat s dodavateli o rizicích")
+    
+    return actions 
