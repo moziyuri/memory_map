@@ -94,7 +94,7 @@ def init_risk_db():
         cur.execute("""
 CREATE TABLE IF NOT EXISTS rivers (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL UNIQUE,
     geometry GEOMETRY(POLYGON, 4326),
     river_type VARCHAR(50),
     flow_direction VARCHAR(10),
