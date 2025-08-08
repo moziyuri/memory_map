@@ -810,7 +810,7 @@ async def get_risk_events(
     conn = None
     try:
         print("🔍 Spouštím get_risk_events...")
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         print("✅ Připojení k databázi OK")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -886,7 +886,7 @@ async def create_risk_event(risk: RiskEventCreate):
     """Vytvoří nový risk event"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -922,7 +922,7 @@ async def get_risk_event(risk_id: int):
     """Získá konkrétní risk event"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -957,7 +957,7 @@ async def get_suppliers():
     conn = None
     try:
         print("🔍 Spouštím get_suppliers...")
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         print("✅ Připojení k databázi OK")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -1004,7 +1004,7 @@ async def get_risk_map():
     """Vrátí data pro risk mapu - všechny risk events a dodavatele"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Získání všech risk events
@@ -1070,7 +1070,7 @@ async def analyze_supplier_risk(
     """Analýza rizik pro dodavatele v daném okolí"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -1100,7 +1100,7 @@ async def get_risk_statistics():
     """Statistiky rizik"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Celkový počet risk events
@@ -1206,7 +1206,7 @@ async def scrape_chmi_floods():
         saved_count = 0
         
         try:
-            conn = next(get_risk_db())
+            conn = get_risk_db()
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 for event in scraped_events:
@@ -1809,7 +1809,7 @@ async def scrape_rss_feeds():
         saved_count = 0
         
         try:
-            conn = next(get_risk_db())
+            conn = get_risk_db()
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 for event in scraped_events:
@@ -2189,7 +2189,7 @@ async def river_flood_simulation(
     """Simulace záplav a jejich dopadu na dodavatele"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Získání dat o řekách a dodavatelích
@@ -2305,7 +2305,7 @@ async def supply_chain_impact_analysis(
     """Analýza dopadu událostí na dodavatelský řetězec"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if supplier_id:
@@ -2404,7 +2404,7 @@ def calculate_river_distance(lat: float, lon: float) -> float:
     """Vypočítá vzdálenost od nejbližší řeky s fallback"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         with conn.cursor() as cur:
             # Zkusíme použít PostGIS funkci
             try:
@@ -2434,7 +2434,7 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
     """Vypočítá riziko záplav s fallback"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         with conn.cursor() as cur:
             # Zkusíme použít PostGIS funkci
             try:
@@ -2635,7 +2635,7 @@ async def clear_old_events():
     """Vyčistí staré události (starší než 7 dní)"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         with conn.cursor() as cur:
             # Smazání událostí starších než 7 dní
             cur.execute("""
@@ -2659,7 +2659,7 @@ async def clear_geopolitical_events():
     """Vyčistí všechny geopolitické události"""
     conn = None
     try:
-        conn = next(get_risk_db())
+        conn = get_risk_db()
         with conn.cursor() as cur:
             # Smazání všech geopolitických událostí
             cur.execute("""
