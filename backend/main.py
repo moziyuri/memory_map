@@ -796,6 +796,8 @@ async def get_risk_events(
     try:
         print("🔍 Spouštím get_risk_events...")
         conn = get_risk_db()
+        if conn is None:
+            raise HTTPException(status_code=500, detail="Database connection unavailable")
         print("✅ Připojení k databázi OK")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -865,6 +867,12 @@ async def get_risk_events(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 @app.post("/api/risks", response_model=RiskEventResponse, status_code=201)
 async def create_risk_event(risk: RiskEventCreate):
@@ -872,6 +880,8 @@ async def create_risk_event(risk: RiskEventCreate):
     conn = None
     try:
         conn = get_risk_db()
+        if conn is None:
+            raise HTTPException(status_code=500, detail="Database connection unavailable")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -899,8 +909,16 @@ async def create_risk_event(risk: RiskEventCreate):
             return dict(new_risk)
             
     except Exception as e:
+        if conn:
+            conn.rollback()
         print(f"Chyba při vytváření risk event: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 @app.get("/api/risks/{risk_id}", response_model=RiskEventResponse)
 async def get_risk_event(risk_id: int):
@@ -908,6 +926,8 @@ async def get_risk_event(risk_id: int):
     conn = None
     try:
         conn = get_risk_db()
+        if conn is None:
+            raise HTTPException(status_code=500, detail="Database connection unavailable")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -918,19 +938,31 @@ async def get_risk_event(risk_id: int):
                        scraped_at, created_at
                 FROM risk_events
                 WHERE id = %s
-            """, (risk_id,))
+            """, [risk_id])
             
-            result = cur.fetchone()
-            if not result:
+            row = cur.fetchone()
+            if not row:
                 raise HTTPException(status_code=404, detail="Risk event not found")
             
-            return dict(result)
-            
+            row_dict = dict(row)
+            row_dict['latitude'] = float(row_dict['latitude'])
+            row_dict['longitude'] = float(row_dict['longitude'])
+            row_dict['id'] = int(row_dict['id'])
+            if row_dict['created_at']:
+                row_dict['created_at'] = str(row_dict['created_at'])
+            return row_dict
+        
     except HTTPException:
         raise
     except Exception as e:
         print(f"Chyba při získávání risk event: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 # ============================================================================
 # SUPPLIERS API ENDPOINTS
@@ -943,6 +975,8 @@ async def get_suppliers():
     try:
         print("🔍 Spouštím get_suppliers...")
         conn = get_risk_db()
+        if conn is None:
+            raise HTTPException(status_code=500, detail="Database connection unavailable")
         print("✅ Připojení k databázi OK")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -979,6 +1013,12 @@ async def get_suppliers():
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 # ============================================================================
 # RISK ANALYSIS API ENDPOINTS
@@ -990,6 +1030,8 @@ async def get_risk_map():
     conn = None
     try:
         conn = get_risk_db()
+        if conn is None:
+            raise HTTPException(status_code=500, detail="Database connection unavailable")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Získání všech risk events
@@ -1045,6 +1087,12 @@ async def get_risk_map():
     except Exception as e:
         print(f"Chyba při získávání risk map data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 @app.get("/api/analysis/supplier-risk", response_model=RiskAnalysisResponse)
 async def analyze_supplier_risk(
@@ -1056,11 +1104,17 @@ async def analyze_supplier_risk(
     conn = None
     try:
         conn = get_risk_db()
+        if conn is None:
+            raise HTTPException(status_code=500, detail="Database connection unavailable")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT * FROM calculate_risk_in_radius(%s, %s, %s)
-            """, (lat, lon, radius_km))
+            try:
+                cur.execute("""
+                    SELECT * FROM calculate_risk_in_radius(%s, %s, %s)
+                """, (lat, lon, radius_km))
+            except Exception as e:
+                # Funkce neexistuje nebo není dostupná
+                raise HTTPException(status_code=503, detail="Database function calculate_risk_in_radius is unavailable")
             
             result = cur.fetchone()
             if result:
@@ -1076,9 +1130,17 @@ async def analyze_supplier_risk(
                     "risk_score": 0.0
                 }
             
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Chyba při analýze rizik dodavatele: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 @app.get("/api/analysis/statistics")
 async def get_risk_statistics():
@@ -1086,6 +1148,8 @@ async def get_risk_statistics():
     conn = None
     try:
         conn = get_risk_db()
+        if conn is None:
+            raise HTTPException(status_code=500, detail="Database connection unavailable")
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Celkový počet risk events
@@ -1110,13 +1174,8 @@ async def get_risk_statistics():
             """)
             events_by_severity = [dict(row) for row in cur.fetchall()]
             
-            # Počet dodavatelů
-            cur.execute("SELECT COUNT(*) as total_suppliers FROM vw_suppliers")
-            total_suppliers = cur.fetchone()['total_suppliers']
-            
             return {
-                "total_events": total_events,
-                "total_suppliers": total_suppliers,
+                "total_events": int(total_events),
                 "events_by_type": events_by_type,
                 "events_by_severity": events_by_severity
             }
@@ -1124,6 +1183,12 @@ async def get_risk_statistics():
     except Exception as e:
         print(f"Chyba při získávání statistik: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 # ============================================================================
 # WEB SCRAPING ENDPOINTS (placeholder pro budoucí implementaci)
@@ -2390,6 +2455,10 @@ def calculate_river_distance(lat: float, lon: float) -> float:
     conn = None
     try:
         conn = get_risk_db()
+        if conn is None:
+            # Fallback - jednoduchý výpočet vzdálenosti od středu ČR
+            center_lat, center_lon = 49.8175, 15.4730
+            return ((lat - center_lat) ** 2 + (lon - center_lon) ** 2) ** 0.5 * 111  # km
         with conn.cursor() as cur:
             # Zkusíme použít PostGIS funkci
             try:
@@ -2420,6 +2489,16 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
     conn = None
     try:
         conn = get_risk_db()
+        if conn is None:
+            river_distance = calculate_river_distance(lat, lon)
+            probability = max(0, 1 - (river_distance / 100))
+            impact_level = 'high' if probability > 0.5 else 'medium' if probability > 0.2 else 'low'
+            return {
+                'probability': probability,
+                'impact_level': impact_level,
+                'river_distance_km': river_distance,
+                'nearest_river_name': 'Neznámá'
+            }
         with conn.cursor() as cur:
             # Zkusíme použít PostGIS funkci
             try:
