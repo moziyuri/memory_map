@@ -1541,18 +1541,29 @@ def parse_rss_feed(rss_xml: str, feed_url: str) -> List[Dict]:
         return []
 
 def analyze_rss_item_for_risk(title: str, description: str, feed_url: str) -> Dict:
-    """Analyzuje RSS položku a hledá rizikové události s lepší klasifikací"""
+    """Analyzuje RSS položku a hledá pouze skutečné rizikové události"""
     
     # Kombinujeme title a description pro analýzu
     text = f"{title} {description}".lower()
     
-    # Filtry pro vyloučení nepodstatných zpráv
+    # STRICTNÍ filtry pro vyloučení nepodstatných zpráv
     exclude_keywords = [
-        'film', 'kino', 'divadlo', 'koncert', 'festival', 'výstava', 'kniha', 'album',
-        'sport', 'fotbal', 'hokej', 'tenis', 'basketball', 'atletika',
-        'kultura', 'umění', 'literatura', 'hudba', 'televize', 'rozhlas',
-        'reklama', 'marketing', 'obchod', 'nákup', 'sleva', 'akce',
-        'výpověď', 'život', 'osobní', 'soukromý', 'rodina', 'dítě'
+        # Kultura a zábava
+        'film', 'kino', 'divadlo', 'koncert', 'festival', 'výstava', 'kniha', 'album', 'hudba', 'umění', 'literatura',
+        'televize', 'rozhlas', 'reklama', 'marketing', 'obchod', 'nákup', 'sleva', 'akce', 'sport', 'fotbal', 'hokej',
+        'tenis', 'basketball', 'atletika', 'kultura', 'osobní', 'soukromý', 'rodina', 'dítě', 'život', 'výpověď',
+        
+        # Politika a mezinárodní vztahy (bez dopadu na dodavatelský řetězec)
+        'politika', 'vláda', 'parlament', 'diplomacie', 'mezinárodní', 'bezpečnost', 'krize', 'napětí', 'spor',
+        'sankce', 'rusko', 'ukrajina', 'finsko', 'japonsko', 'evropa', 'havel', 'filozof', 'ministryně',
+        
+        # Osobní nehody a události
+        'řidič', 'auto', 'nehoda', 'motorkář', 'kombajn', 'montér', 'stožár', 'nemocnice', 'přežil', 'nepřežil',
+        'srážka', 'předjížděl', 'vyjel ze silnice', 'spadl', 'olomoucku', 'plzeňsku', 'hradecku', 'šumpersku',
+        
+        # Místní události bez dopadu
+        'břeclavi', 'apollo', 'koupal', 'nadšenci', 'oblíbené', 'lokality', 'krásu', 'pražský okruh', 'běchovic',
+        'd1', 'dopravní úleva', 'spojka'
     ]
     
     # Kontrola vylučovacích klíčových slov
@@ -1560,43 +1571,34 @@ def analyze_rss_item_for_risk(title: str, description: str, feed_url: str) -> Di
         if exclude_word in text:
             return None  # Nejedná se o rizikovou událost
     
-    # Specifická klíčová slova pro rizikové události (priorita řek a počasí)
+    # POUZE skutečné rizikové události s konkrétními indikátory
     risk_keywords = {
         'flood': [
-            'záplavy', 'povodně', 'deště', 'voda', 'vltava', 'morava', 'labe', 'ohře', 'berounka',
-            'řeka', 'přetečení', 'vylití', 'zaplavení', 'povodňová', 'meteorologická', 'chmi',
-            'extrémní počasí', 'bouřka', 'přívalový déšť', 'srážky', 'vodní hladina'
+            # Konkrétní povodňové události
+            'povodně', 'záplavy', 'přetečení', 'vylití', 'zaplavení', 'povodňová', 'meteorologická výstraha',
+            'extrémní srážky', 'přívalový déšť', 'vodní hladina', 'vylití z břehů', 'zaplavené ulice',
+            'evakuace', 'povodňový stav', 'mimořádná událost'
         ],
         'supply_chain': [
-            'doprava', 'dálnice', 'silnice', 'uzavírka', 'nehoda', 'havárie', 'blokáda',
-            'dodavatelský řetězec', 'logistika', 'nákladní doprava', 'přeprava',
-            'dodávky', 'zásobování', 'výroba', 'továrna', 'sklad', 'distribuce'
-        ],
-        'protest': [
-            'protest', 'demonstrace', 'stávka', 'manifestace', 'nepokoje', 'blokáda',
-            'odborový svaz', 'výpověď práce', 'stávkující', 'protestující'
-        ],
-        'geopolitical': [
-            'politika', 'vláda', 'parlament', 'napětí', 'konflikt', 'diplomacie',
-            'mezinárodní', 'bezpečnost', 'krize', 'napětí', 'spor'
+            # Konkrétní dopravní a dodavatelské problémy
+            'uzavírka dálnice', 'blokáda silnice', 'havárie mostu', 'sesuv půdy na silnici',
+            'přerušení dodávek', 'výpadek výroby', 'poškození továrny', 'havárie skladu',
+            'logistické problémy', 'přerušení dopravy', 'blokáda přístavu', 'havárie železnice'
         ]
     }
     
-    # Hledáme klíčová slova s prioritou řek a počasí
+    # Hledáme POUZE konkrétní rizikové události
     for event_type, keywords in risk_keywords.items():
         for keyword in keywords:
             if keyword in text:
-                # Dodatečná kontrola pro lepší kvalitu
+                # Dodatečná kontrola pro záplavy - musí obsahovat konkrétní lokaci nebo řeku
                 if event_type == 'flood':
-                    # Pro záplavy vyžadujeme konkrétnější indikátory
-                    if any(word in text for word in ['záplavy', 'povodně', 'vltava', 'morava', 'labe', 'chmi', 'meteorologická']):
+                    if any(word in text for word in ['vltava', 'morava', 'labe', 'ohře', 'berounka', 'řeka', 'chmi', 'meteorologická']):
                         return create_rss_event(title, description, event_type, keyword, feed_url)
+                # Pro dodavatelský řetězec - musí být konkrétní dopravní problém
                 elif event_type == 'supply_chain':
-                    # Pro dodavatelský řetězec vyžadujeme konkrétní dopravní problémy
-                    if any(word in text for word in ['doprava', 'dálnice', 'uzavírka', 'nehoda', 'havárie', 'dodavatelský']):
+                    if any(word in text for word in ['dálnice', 'silnice', 'most', 'železnice', 'přístav', 'továrna', 'sklad', 'dodávky']):
                         return create_rss_event(title, description, event_type, keyword, feed_url)
-                else:
-                    return create_rss_event(title, description, event_type, keyword, feed_url)
     
     return None
 

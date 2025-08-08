@@ -81,7 +81,7 @@ def init_risk_db():
         cur.execute("""
             CREATE TABLE IF NOT EXISTS vw_suppliers (
                 id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
+                name VARCHAR(255) NOT NULL UNIQUE,
                 location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
                 category VARCHAR(100), -- 'electronics', 'tires', 'steering', 'brakes'
                 risk_level VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
@@ -297,7 +297,7 @@ $$ LANGUAGE plpgsql;
                 cur.execute("""
                     INSERT INTO vw_suppliers (name, location, category, risk_level)
                     VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
-                    ON CONFLICT (id) DO NOTHING
+                    ON CONFLICT (name) DO NOTHING
                 """, supplier)
             except Exception as e:
                 print(f"⚠️ Chyba při vkládání dodavatele {supplier[0]}: {str(e)}")
