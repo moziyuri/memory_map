@@ -2798,32 +2798,35 @@ def analyze_historical_events(lat: float, lon: float, radius_km: int) -> dict:
 
 def calculate_combined_risk(river_analysis: dict, elevation_analysis: dict, historical_analysis: dict) -> dict:
     """Výpočet kombinovaného rizika"""
-    risk_score = 0
+    risk_score = 0.0
     
     # Riziko od řek
-    if river_analysis['risk_level'] == 'high':
-        risk_score += 40
-    elif river_analysis['risk_level'] == 'medium':
+    river_level = river_analysis.get('risk_level', 'low')
+    if river_level == 'high':
+        risk_score += 45
+    elif river_level == 'medium':
         risk_score += 20
     
     # Riziko od nadmořské výšky
-    if elevation_analysis['flood_vulnerability'] == 'high':
-        risk_score += 30
-    elif elevation_analysis['flood_vulnerability'] == 'medium':
-        risk_score += 15
+    elev_vuln = elevation_analysis.get('flood_vulnerability', 'low')
+    if elev_vuln == 'high':
+        risk_score += 35
+    elif elev_vuln == 'medium':
+        risk_score += 10
     
     # Riziko z historických událostí
-    if historical_analysis['total_historical_events'] > 2:
-        risk_score += 30
-    elif historical_analysis['total_historical_events'] > 0:
-        risk_score += 15
+    total_hist = int(historical_analysis.get('total_historical_events', 0) or 0)
+    if total_hist >= 3:
+        risk_score += 20
+    elif total_hist >= 1:
+        risk_score += 10
     
     # Celkové hodnocení
-    if risk_score >= 70:
+    if risk_score >= 75:
         overall_risk = "critical"
-    elif risk_score >= 50:
+    elif risk_score >= 55:
         overall_risk = "high"
-    elif risk_score >= 30:
+    elif risk_score >= 35:
         overall_risk = "medium"
     else:
         overall_risk = "low"

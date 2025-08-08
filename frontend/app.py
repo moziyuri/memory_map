@@ -124,7 +124,7 @@ def get_advanced_analysis(lat: float, lon: float, supplier_id: int | None):
     try:
         flood_data = None
         geo_data = None
-        # Simulace záplav (preferujeme vybraného dodavatele)
+        # Simulace záplav (pokud je dodavatel)
         if supplier_id:
             resp = requests.get(
                 f"{BACKEND_URL}/api/analysis/river-flood-simulation",
@@ -143,35 +143,34 @@ def get_advanced_analysis(lat: float, lon: float, supplier_id: int | None):
                     if 'river_distance_km' not in sim and 'nearest_river_distance_km' in sim:
                         sim['river_distance_km'] = sim.get('nearest_river_distance_km')
                 flood_data = data
-        else:
-            # Bez dodavatele provedeme lehčí geografickou analýzu pouze podle souřadnic
-            resp = requests.get(
-                f"{BACKEND_URL}/api/analysis/geographic-risk-assessment",
-                params={"lat": lat, "lon": lon, "radius_km": 50},
-                timeout=25,
-            )
-            if resp.status_code == 200:
-                g = resp.json() or {}
-                # Normalizace struktury combined_risk_assessment
-                assess = g.get('combined_risk_assessment')
-                if isinstance(assess, dict):
-                    # sjednotíme případné klíče uvnitř
-                    if 'probability' not in assess and 'flood_probability' in assess:
-                        assess['probability'] = assess.get('flood_probability')
-                    if 'impact_level' not in assess and 'flood_risk_level' in assess:
-                        assess['impact_level'] = assess.get('flood_risk_level')
-                    if 'river_distance_km' not in assess and 'nearest_river_distance_km' in assess:
-                        assess['river_distance_km'] = assess.get('nearest_river_distance_km')
-                elif isinstance(assess, list):
-                    for a in assess:
-                        if isinstance(a, dict):
-                            if 'probability' not in a and 'flood_probability' in a:
-                                a['probability'] = a.get('flood_probability')
-                            if 'impact_level' not in a and 'flood_risk_level' in a:
-                                a['impact_level'] = a.get('flood_risk_level')
-                            if 'river_distance_km' not in a and 'nearest_river_distance_km' in a:
-                                a['river_distance_km'] = a.get('nearest_river_distance_km')
-                geo_data = g
+
+        # Geografická analýza – vždy zkusíme podle aktuálních souřadnic
+        resp = requests.get(
+            f"{BACKEND_URL}/api/analysis/geographic-risk-assessment",
+            params={"lat": lat, "lon": lon, "radius_km": 50},
+            timeout=25,
+        )
+        if resp.status_code == 200:
+            g = resp.json() or {}
+            # Normalizace struktury combined_risk_assessment
+            assess = g.get('combined_risk_assessment')
+            if isinstance(assess, dict):
+                if 'probability' not in assess and 'flood_probability' in assess:
+                    assess['probability'] = assess.get('flood_probability')
+                if 'impact_level' not in assess and 'flood_risk_level' in assess:
+                    assess['impact_level'] = assess.get('flood_risk_level')
+                if 'river_distance_km' not in assess and 'nearest_river_distance_km' in assess:
+                    assess['river_distance_km'] = assess.get('nearest_river_distance_km')
+            elif isinstance(assess, list):
+                for a in assess:
+                    if isinstance(a, dict):
+                        if 'probability' not in a and 'flood_probability' in a:
+                            a['probability'] = a.get('flood_probability')
+                        if 'impact_level' not in a and 'flood_risk_level' in a:
+                            a['impact_level'] = a.get('flood_risk_level')
+                        if 'river_distance_km' not in a and 'nearest_river_distance_km' in a:
+                            a['river_distance_km'] = a.get('nearest_river_distance_km')
+            geo_data = g
         return flood_data, geo_data
     except Exception:
         return None, None
@@ -667,16 +666,25 @@ def main():
                     items = [assess]
             st.markdown("**📊 Top výsledky geografické analýzy:**")
             for i, analysis in enumerate(items, 1):
-                risk_score = analysis.get('risk_score', 0)
+                risk_score = float(analysis.get('risk_score', 0.0) or 0.0)
                 with st.expander(f"#{i} Risk Score: {risk_score:.1f}%"):
                     col1, col2 = st.columns(2)
                     with col1:
                         st.metric("Risk Score", f"{risk_score:.1f}%")
-                        st.metric("Vzdálenost od řeky", f"{analysis.get('river_distance_km', 0):.1f} km")
+                        dist = float(analysis.get('river_distance_km', analysis.get('nearest_river_distance_km', 0.0)) or 0.0)
+                        st.metric("Vzdálenost od řeky", f"{dist:.1f} km")
                     with col2:
-                        st.metric("Nadmořská výška", f"{analysis.get('elevation_m', 0):.0f} m")
-                        st.metric("Historické události", analysis.get('historical_events', 0))
-                    st.info(f"💡 **Doporučení:** {analysis.get('recommendation', 'Neznámé')}")
+                        elev = float(analysis.get('elevation_m', 0.0) or 0.0)
+                        hist = int(analysis.get('historical_events', analysis.get('total_historical_events', 0)) or 0)
+                        st.metric("Nadmořská výška", f"{elev:.0f} m")
+                        st.metric("Historické události", hist)
+                    recs = analysis.get('recommendations') or analysis.get('recommendation')
+                    if isinstance(recs, list) and recs:
+                        st.info("💡 **Doporučení:**\n- " + "\n- ".join(recs))
+                    elif isinstance(recs, str) and recs:
+                        st.info(f"💡 **Doporučení:** {recs}")
+                    else:
+                        st.info("💡 **Doporučení:** Aktualizujte souřadnice nebo zvyšte poloměr analýzy.")
         else:
             st.info("ℹ️ Zadejte souřadnice (lat/lon) a spusťte analýzu pro zobrazení výsledků.")
     
