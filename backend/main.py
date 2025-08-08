@@ -2458,7 +2458,10 @@ async def river_flood_simulation(
                 
                 return {
                     "total_suppliers_analyzed": len(flood_analysis),
-                    "high_risk_suppliers": len([s for s in flood_analysis if s['flood_risk']['impact_level'] == 'high']),
+                    "high_risk_suppliers": len([
+                        s for s in flood_analysis 
+                        if (s.get('flood_risk') or {}).get('impact_level', 'low') in ['high', 'critical']
+                    ]),
                     "flood_analysis": flood_analysis
                 }
                 
@@ -2609,10 +2612,53 @@ async def supply_chain_impact_analysis(
 # HELPER FUNCTIONS FOR ADVANCED ANALYSIS
 # ============================================================================
 
+CZECH_BOUNDS = {
+    'min_lat': 48.5, 'max_lat': 51.1,
+    'min_lon': 12.0, 'max_lon': 18.9
+}
+
+def is_in_czech_republic(lat: float, lon: float) -> bool:
+    return (
+        CZECH_BOUNDS['min_lat'] <= lat <= CZECH_BOUNDS['max_lat'] and
+        CZECH_BOUNDS['min_lon'] <= lon <= CZECH_BOUNDS['max_lon']
+    )
+
+def sanitize_coords_backend(lat: float, lon: float) -> tuple[float, float]:
+    """Opraví případné prohození lat/lon. Pokud swap dává CZ smysl, použije se."""
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except Exception:
+        return lat, lon
+    if is_in_czech_republic(lat_f, lon_f):
+        return lat_f, lon_f
+    if is_in_czech_republic(lon_f, lat_f):
+        return lon_f, lat_f
+    return lat_f, lon_f
+
+def guess_nearest_river_name(lat: float, lon: float) -> str:
+    """Hrubý odhad nejbližší velké řeky v ČR pro fallback."""
+    try:
+        if 14.0 <= lon <= 15.2 and 49.2 <= lat <= 50.4:
+            return 'Vltava'
+        if 15.0 <= lon <= 16.6 and lat >= 49.8:
+            return 'Labe'
+        if lon >= 16.2 or lat <= 49.2:
+            return 'Morava'
+        if 12.0 <= lon <= 13.5 and lat >= 49.6:
+            return 'Ohře'
+        if 12.5 <= lon <= 14.5 and 49.4 <= lat <= 49.9:
+            return 'Berounka'
+    except Exception:
+        pass
+    return 'Neznámá'
+
 def calculate_river_distance(lat: float, lon: float) -> float:
     """Vypočítá vzdálenost od nejbližší řeky s fallback"""
     conn = None
     try:
+        # Sanitizace souřadnic (swap pokud dává smysl)
+        lat, lon = sanitize_coords_backend(lat, lon)
         conn = get_risk_db()
         if conn is None:
             # Fallback - jednoduchý výpočet vzdálenosti od středu ČR
@@ -2647,6 +2693,8 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
     """Vypočítá riziko záplav s fallback"""
     conn = None
     try:
+        # Sanitizace souřadnic
+        lat, lon = sanitize_coords_backend(lat, lon)
         conn = get_risk_db()
         if conn is None:
             river_distance = calculate_river_distance(lat, lon)
@@ -2656,7 +2704,7 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
                 'probability': probability,
                 'impact_level': impact_level,
                 'river_distance_km': river_distance,
-                'nearest_river_name': 'Neznámá',
+                'nearest_river_name': guess_nearest_river_name(lat, lon),
                 'mitigation_needed': probability > 0.5 or impact_level in ['high', 'critical']
             }
         with conn.cursor() as cur:
@@ -2666,10 +2714,19 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
                 result = cur.fetchone()
                 if result and result[0] is not None:
                     out = result[0]
-                    if isinstance(out, dict) and 'mitigation_needed' not in out:
-                        prob = out.get('probability', 0)
-                        impact = out.get('impact_level', 'low')
-                        out['mitigation_needed'] = prob > 0.5 or impact in ['high', 'critical']
+                    # Normalizace klíčů z DB funkce na jednotný formát pro frontend
+                    if isinstance(out, dict):
+                        if 'probability' not in out and 'flood_probability' in out:
+                            out['probability'] = out.get('flood_probability')
+                        if 'impact_level' not in out and 'flood_risk_level' in out:
+                            out['impact_level'] = out.get('flood_risk_level')
+                        if 'river_distance_km' not in out and 'nearest_river_distance_km' in out:
+                            out['river_distance_km'] = out.get('nearest_river_distance_km')
+                        # Zajistit přítomnost mitigation_needed
+                        prob = out.get('probability', out.get('flood_probability', 0))
+                        impact = out.get('impact_level', out.get('flood_risk_level', 'low'))
+                        if 'mitigation_needed' not in out:
+                            out['mitigation_needed'] = (prob > 0.5) or (impact in ['high', 'critical'])
                     return out
             except Exception as e:
                 # Příliš hlučné v produkci – ponecháme jen info
@@ -2684,7 +2741,7 @@ def calculate_flood_risk(lat: float, lon: float, flood_level_m: float) -> dict:
                 'probability': probability,
                 'impact_level': impact_level,
                 'river_distance_km': river_distance,
-                'nearest_river_name': 'Vltava' if lat > 49.5 else 'Morava' if lat < 49.5 else 'Labe',
+                'nearest_river_name': guess_nearest_river_name(lat, lon),
                 'mitigation_needed': probability > 0.5 or impact_level in ['high', 'critical']
             }
             

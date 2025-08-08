@@ -71,10 +71,13 @@ def is_in_czech_republic(lat, lon):
             CZECH_BOUNDS['min_lon'] <= lon <= CZECH_BOUNDS['max_lon'])
 
 def sanitize_coords(lat, lon):
-    """Heuristika: pokud bod neleží v ČR, ale prohození dává smysl, prohodíme (častá chyba lat/lon)."""
+    """Heuristika: opraví české desetinné čárky a případné prohození lat/lon."""
     try:
-        lat_f = float(lat)
-        lon_f = float(lon)
+        # Podpora zadaní s čárkou
+        lat_s = str(lat).replace(',', '.')
+        lon_s = str(lon).replace(',', '.')
+        lat_f = float(lat_s)
+        lon_f = float(lon_s)
     except Exception:
         return lat, lon
     if is_in_czech_republic(lat_f, lon_f):
@@ -129,7 +132,17 @@ def get_advanced_analysis(lat: float, lon: float, supplier_id: int | None):
                 timeout=25,
             )
             if resp.status_code == 200:
-                flood_data = resp.json()
+                data = resp.json() or {}
+                # Normalizace klíčů pro robustní zobrazení
+                if isinstance(data.get('flood_simulation'), dict):
+                    sim = data['flood_simulation']
+                    if 'probability' not in sim and 'flood_probability' in sim:
+                        sim['probability'] = sim.get('flood_probability')
+                    if 'impact_level' not in sim and 'flood_risk_level' in sim:
+                        sim['impact_level'] = sim.get('flood_risk_level')
+                    if 'river_distance_km' not in sim and 'nearest_river_distance_km' in sim:
+                        sim['river_distance_km'] = sim.get('nearest_river_distance_km')
+                flood_data = data
         else:
             # Bez dodavatele provedeme lehčí geografickou analýzu pouze podle souřadnic
             resp = requests.get(
@@ -138,7 +151,27 @@ def get_advanced_analysis(lat: float, lon: float, supplier_id: int | None):
                 timeout=25,
             )
             if resp.status_code == 200:
-                geo_data = resp.json()
+                g = resp.json() or {}
+                # Normalizace struktury combined_risk_assessment
+                assess = g.get('combined_risk_assessment')
+                if isinstance(assess, dict):
+                    # sjednotíme případné klíče uvnitř
+                    if 'probability' not in assess and 'flood_probability' in assess:
+                        assess['probability'] = assess.get('flood_probability')
+                    if 'impact_level' not in assess and 'flood_risk_level' in assess:
+                        assess['impact_level'] = assess.get('flood_risk_level')
+                    if 'river_distance_km' not in assess and 'nearest_river_distance_km' in assess:
+                        assess['river_distance_km'] = assess.get('nearest_river_distance_km')
+                elif isinstance(assess, list):
+                    for a in assess:
+                        if isinstance(a, dict):
+                            if 'probability' not in a and 'flood_probability' in a:
+                                a['probability'] = a.get('flood_probability')
+                            if 'impact_level' not in a and 'flood_risk_level' in a:
+                                a['impact_level'] = a.get('flood_risk_level')
+                            if 'river_distance_km' not in a and 'nearest_river_distance_km' in a:
+                                a['river_distance_km'] = a.get('nearest_river_distance_km')
+                geo_data = g
         return flood_data, geo_data
     except Exception:
         return None, None
@@ -174,7 +207,7 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
     
     # Přidání dodavatelů (modré značky) s clusteringem
     supplier_group = folium.FeatureGroup(name="🏭 Dodavatelé", show=True)
-    supplier_cluster = MarkerCluster(name="🏭 Dodavatelé - cluster", show=True)
+    supplier_cluster = MarkerCluster(name="🏭 Dodavatelé - cluster", show=True, disableClusteringAtZoom=11)
     
     for supplier in suppliers:
         if supplier.get('latitude') and supplier.get('longitude'):
@@ -208,7 +241,7 @@ def create_risk_map(events, suppliers, flood_data=None, geo_data=None):
     
     # Přidání rizikových událostí (červené značky) s clusteringem
     event_group = folium.FeatureGroup(name="⚠️ Rizikové události", show=True)
-    event_cluster = MarkerCluster(name="⚠️ Události - cluster", show=True)
+    event_cluster = MarkerCluster(name="⚠️ Události - cluster", show=True, disableClusteringAtZoom=11)
     
     for event in events:
         if event.get('latitude') and event.get('longitude'):
@@ -374,7 +407,7 @@ def main():
         display_suppliers = suppliers
     
     # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🗺️ Mapa rizik", "📰 Scraping", "🏭 Dodavatelé", "🔬 Pokročilá analýza", "ℹ️ O aplikaci"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🗺️ Mapa rizik", "📰 Scraping", "🏭 Dodavatelé", "🔬 Analýza rizik", "ℹ️ O aplikaci"])
     
     # Tab 1: Mapa rizik
     with tab1:
