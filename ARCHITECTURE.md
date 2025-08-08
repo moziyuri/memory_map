@@ -38,12 +38,13 @@ VW Group Risk Analyst Dashboard je full-stack aplikace se třemi hlavními kompo
 - **Technologie**: FastAPI, Pydantic, psycopg2, Requests, xml.etree.ElementTree
 - **Odpovědnost**:
   - Poskytování REST API endpointů
-  - Web scraping reálných dat z CHMI API a RSS feeds
+  - Web scraping reálných dat z CHMI API, OpenMeteo API a RSS feeds
   - Zpracování a validace dat
   - Analýza rizikových klíčových slov
   - Ukládání geografických dat rizikových událostí
   - Komunikace s databází
   - API dokumentace (Swagger)
+  - Robustní error handling a transaction management
 
 ### 3. PostgreSQL Databáze
 
@@ -54,6 +55,7 @@ VW Group Risk Analyst Dashboard je full-stack aplikace se třemi hlavními kompo
   - Ukládání geografických bodů pomocí PostGIS
   - Geografické dotazy a operace pomocí PostGIS
   - Výpočet rizik v okolí dodavatelů
+  - Pokročilé GIS funkce pro analýzu vzdálenosti od řek
 
 ## Datový model
 
@@ -62,13 +64,15 @@ VW Group Risk Analyst Dashboard je full-stack aplikace se třemi hlavními kompo
 ```sql
 CREATE TABLE risk_events (
     id SERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
+    title VARCHAR(255) NOT NULL,
     description TEXT,
-    event_type VARCHAR(50) NOT NULL,
-    severity VARCHAR(20) NOT NULL,
-    source VARCHAR(50) NOT NULL,
-    location GEOGRAPHY(POINT, 4326),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
+    event_type VARCHAR(50), -- 'flood', 'protest', 'supply_chain', 'geopolitical'
+    severity VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
+    source VARCHAR(100), -- 'chmi_api', 'rss', 'manual', 'copernicus', 'openmeteo'
+    url TEXT, -- Zdroj dat
+    scraped_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW()
 );
 ```
 
@@ -77,10 +81,23 @@ CREATE TABLE risk_events (
 ```sql
 CREATE TABLE vw_suppliers (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    category VARCHAR(50) NOT NULL,
-    risk_level VARCHAR(20) NOT NULL,
-    location GEOGRAPHY(POINT, 4326),
+    name VARCHAR(255) NOT NULL UNIQUE,
+    location GEOGRAPHY(POINT, 4326),  -- Geografická pozice
+    category VARCHAR(100), -- 'electronics', 'tires', 'steering', 'brakes'
+    risk_level VARCHAR(20), -- 'low', 'medium', 'high', 'critical'
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Tabulka `rivers`
+
+```sql
+CREATE TABLE rivers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    geometry GEOMETRY(POLYGON, 4326),
+    river_type VARCHAR(50),
+    flow_direction VARCHAR(10),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -100,85 +117,102 @@ CREATE TABLE vw_suppliers (
 | GET    | /api/scrape/run-all        | Spuštění všech web scrapers               |
 | GET    | /api/test-chmi             | Test CHMI API endpointů                   |
 | GET    | /api/test-openmeteo        | Test OpenMeteo API                        |
-| GET    | /docs                      | API dokumentace (Swagger)                 |
+| GET    | /api/test-scraping-improved| Test vylepšeného scrapingu                |
 
 ## Zdroje dat
 
 ### Reálná data (Web Scraping)
 
 #### CHMI API
-- **Endpointy**: 
-  - `https://hydro.chmi.cz/hpps/` (funkční)
-  - `https://hydro.chmi.cz/hpps/index.php` (funkční)
-  - `https://hydro.chmi.cz/hpps/hpps_act.php` (nefunkční)
-  - `https://hydro.chmi.cz/hpps/hpps_act_quick.php` (nefunkční)
-- **Typ dat**: Meteorologická varování, povodňové informace
-- **Frekvence**: Při volání `/api/scrape/chmi`
-- **Fallback**: OpenMeteo API při neúspěchu CHMI
+- **Endpoint**: `https://hydro.chmi.cz/hpps/`
+- **Typ dat**: Meteorologická data a varování
+- **Frekvence**: Real-time
+- **Status**: Funkční s fallback na OpenMeteo API
 
 #### OpenMeteo API
 - **Endpoint**: `https://api.open-meteo.com/v1/forecast`
 - **Typ dat**: Meteorologická data (teplota, vítr, srážky)
-- **Výhody**: Bezplatné, bez API key, spolehlivé
-- **Frekvence**: Při volání `/api/scrape/chmi` jako fallback
+- **Frekvence**: Real-time
+- **Status**: Primární zdroj meteorologických dat
+- **Výhody**: Bez API klíče, spolehlivé, přesné
 
 #### RSS Feeds
-- **Zdroje**:
-  - `https://www.novinky.cz/rss`
-  - `https://www.seznamzpravy.cz/rss`
-  - `https://hn.cz/rss/2`
-  - `https://www.irozhlas.cz/rss/irozhlas`
-- **Typ dat**: Zprávy z českých médií
-- **Frekvence**: Při volání `/api/scrape/rss`
+- **Zdroje**: Novinky.cz, Seznam Zprávy, HN.cz, iRozhlas
+- **Typ dat**: Zprávy a události
+- **Frekvence**: Real-time
+- **Status**: Funkční s vylepšenými filtry
 
 ### Demo data
-- **Dodavatelé VW Group**: Fiktivní dodavatelé s rizikovým hodnocením
-- **Rizikové události**: Historické události pro demonstraci funkcí
 
-## Nasazení
+#### Dodavatelé VW Group
+- **Počet**: 10 ukázkových dodavatelů
+- **Kategorie**: Electronics, Tires, Steering, Brakes, Body Parts
+- **Rizikové úrovně**: Low, Medium, High, Critical
+- **Geografické umístění**: Různé lokace v ČR
+
+## Pokročilé funkce
+
+### GIS Analýza
+- **Výpočet vzdálenosti od řek**: Analýza blízkosti hlavních řek ČR
+- **Simulace záplav**: Hodnocení rizika záplav na základě vzdálenosti od řek
+- **Geografické indexy**: Optimalizace prostorových dotazů
+- **PostGIS funkce**: Pokročilé geografické operace
+
+### Error Handling
+- **Robustní database initialization**: Lepší error handling při inicializaci
+- **Transaction management**: Spolehlivé commit/rollback operace
+- **Connection timeout**: Lepší handling připojení k databázi
+- **Fallback mechanismy**: Alternativní zdroje dat při selhání
+
+### Testing Suite
+- **test_weather_api.py**: Test různých weather APIs
+- **test_improved_scraping.py**: Test vylepšeného scrapingu
+- **test_current_state.py**: Komplexní test současného stavu
+- **test_backend.py**: Test backend funkcí
+
+## Deployment
+
+### Backend (Render.com)
+- **Platforma**: Render.com
+- **Runtime**: Python 3
+- **Framework**: FastAPI + Uvicorn
+- **Database**: PostgreSQL + PostGIS
+- **URL**: https://risk-analyst.onrender.com
 
 ### Frontend (Streamlit Cloud)
+- **Platforma**: Streamlit Cloud
+- **Framework**: Streamlit
+- **URL**: https://memory-map-feature-risk-analyst-frontend-app.onrender.com
 
-- **URL**: https://stanislavhoracekmemorymap.streamlit.app
-- **Proces nasazení**: Automatický deployment z GitHub repozitáře
+### CORS Configuration
+- **Frontend URL**: Povoleno v CORS nastavení
+- **Wildcard**: Povoleno pro development
+- **Security**: Bezpečná komunikace mezi frontend a backend
 
-### Backend API (Render.com)
+## Monitoring a Logging
 
-- **URL**: https://risk-analyst.onrender.com
-- **Proces nasazení**: 
-  1. Web Service na Render.com
-  2. Build Command: `pip install -r requirements.txt && python init_risk_db.py`
-  3. Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-  4. Environment Variables:
-     - `RISK_DATABASE_URL`: PostgreSQL connection string
-     - `DATABASE_URL`: PostgreSQL connection string
+### Backend Logging
+- **Structured logging**: Detailní logy všech operací
+- **Error tracking**: Sledování chyb a výjimek
+- **Performance monitoring**: Monitoring výkonu API
+- **Database connection**: Sledování připojení k databázi
 
-### PostgreSQL (Render.com)
+### Health Checks
+- **API health**: `/` endpoint pro kontrolu dostupnosti
+- **Database health**: Kontrola připojení k databázi
+- **Scraping health**: Test funkcionality web scrapingu
+- **CORS health**: Kontrola komunikace s frontend
 
-- **Databáze**: `risk_analyst`
-- **Rozšíření**: PostGIS pro geografické operace
-- **Inicializace**: Automaticky při build procesu pomocí `init_risk_db.py`
+## Security
 
-## Bezpečnost a optimalizace
+### API Security
+- **CORS**: Konfigurované pro bezpečnou komunikaci
+- **Input validation**: Pydantic modely pro validaci dat
+- **SQL injection protection**: Parametrizované dotazy
+- **Error handling**: Bezpečné error messages
 
-### Render.com Free plán limity
-- **Web Service**: 512 MB RAM, uspání po 15 minutách neaktivity
-- **PostgreSQL**: 1 GB prostoru, max 10 současných připojení
-
-### Optimalizace
-- Geografické omezení na ČR pro snížení datového objemu
-- Cachování dat v session state
-- Efektivní dotazy s PostGIS indexy
-- Minimalizace API volání
-
-## Monitoring a logování
-
-### Backend logování
-- Detailní print statements pro debugging
-- Error handling s traceback
-- API response logging
-
-### Frontend monitoring
-- Session state pro cachování
-- Error handling pro API volání
-- User feedback pro všechny operace 
+### Data Security
+- **Environment variables**: Citlivé údaje v environment proměnných
+- **Database credentials**: Bezpečné uložení přihlašovacích údajů
+- **SSL connections**: Šifrovaná komunikace s databází
+- **Input sanitization**: Očištění vstupních dat 

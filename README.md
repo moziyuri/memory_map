@@ -2,25 +2,27 @@
 
 > **Aplikace vytvořená za účelem pohovoru na pozici Risk Analyst** - Projekt demonstruje praktické dovednosti v oblasti full-stack vývoje, web scraping, GIS analýzy a supply chain risk management.
 
-Interaktivní dashboard pro analýzu rizikových událostí v dodavatelském řetězci VW Group s využitím reálných dat z CHMI API a RSS feeds.
+Interaktivní dashboard pro analýzu rizikových událostí v dodavatelském řetězci VW Group s využitím reálných dat z CHMI API, OpenMeteo API a RSS feeds.
 
 ![Risk Analyst Dashboard Preview](https://i.imgur.com/example.png)
 
 ## 🌟 Funkce
 
 - **Interaktivní mapa rizik** zobrazující rizikové události a dodavatele VW Group
-- **Web scraping** reálných dat z CHMI (počasí) a RSS feeds (zprávy)
+- **Web scraping** reálných dat z CHMI (počasí), OpenMeteo API (meteorologická data) a RSS feeds (zprávy)
 - **Filtry** podle typu události, závažnosti, zdroje dat a časového období
 - **Analýza dodavatelů** s rizikovým hodnocením a kategorizací
 - **Statistiky a trendy** rizikových událostí v čase
 - **Geografické omezení** na území České republiky
 - **Responzivní design** pro používání na počítači i mobilních zařízeních
+- **Pokročilé GIS funkce** včetně analýzy vzdálenosti od řek a simulace záplav
 
 ## 🔗 Odkazy
 
-- **Frontend**: [https://stanislavhoracekmemorymap.streamlit.app](https://stanislavhoracekmemorymap.streamlit.app)
+- **Frontend**: [https://memory-map-feature-risk-analyst-frontend-app.onrender.com](https://memory-map-feature-risk-analyst-frontend-app.onrender.com)
 - **Backend API**: [https://risk-analyst.onrender.com](https://risk-analyst.onrender.com)
 - **API dokumentace**: [https://risk-analyst.onrender.com/docs](https://risk-analyst.onrender.com/docs)
+- **GitHub Repository**: [https://github.com/moziyuri/memory_map/tree/feature/risk-analyst](https://github.com/moziyuri/memory_map/tree/feature/risk-analyst)
 
 ## 📖 O aplikaci
 
@@ -32,13 +34,15 @@ Aplikace byla vytvořena specificky pro demonstraci technických dovedností v k
 - GIS analýzou a geografickými daty
 - Supply chain risk management
 - Moderními technologiemi a frameworks
+- Robustní error handling a deployment
 
 ### Koncept
 Základní myšlenkou je monitoring rizikových událostí, které mohou ovlivnit dodavatelský řetězec VW Group. Aplikace:
-- Sbírá reálná data z CHMI API (počasí) a RSS feeds (zprávy)
+- Sbírá reálná data z CHMI API (počasí), OpenMeteo API (meteorologická data) a RSS feeds (zprávy)
 - Analyzuje rizika v okolí dodavatelů VW Group
 - Poskytuje přehledné statistiky a trendy
 - Umožňuje filtrování a analýzu podle různých kritérií
+- Implementuje pokročilé GIS funkce pro analýzu rizik
 
 ### Technologická ukázka
 Aplikace demonstruje zkušenosti s:
@@ -48,6 +52,7 @@ Aplikace demonstruje zkušenosti s:
 - Vývojem interaktivních mapových rozhraní
 - Návrhem a implementací REST API
 - Nasazením aplikací na cloud platformy
+- Robustní error handling a transaction management
 
 ## 🏗️ Architektura
 
@@ -98,8 +103,11 @@ risk-analyst-dashboard/
 │
 ├── backend/               # FastAPI backend
 │   ├── main.py            # Hlavní soubor API s web scraping
-│   ├── init_risk_db.py    # Inicializační skript pro databázi
+│   ├── init_risk_db.py    # Inicializační skript pro databázi (vylepšený)
+│   ├── reset_risk_db.py   # Reset skript pro databázi (vylepšený)
 │   ├── test_risk_db.py    # Test připojení k databázi
+│   ├── test_weather_api.py # Test různých weather APIs
+│   ├── test_improved_scraping.py # Test vylepšeného scrapingu
 │   └── requirements.txt   # Závislosti pro backend
 │
 ├── database/              # SQL skripty
@@ -117,7 +125,7 @@ risk-analyst-dashboard/
 
 ### Reálná data
 - **CHMI API** - Meteorologická data a varování (počasí, povodně)
-- **OpenMeteo API** - Spolehlivé meteorologické data jako fallback
+- **OpenMeteo API** - Spolehlivé meteorologické data jako primární zdroj
 - **RSS feeds** - Zprávy z českých médií (Novinky.cz, Seznam Zprávy, HN.cz, iRozhlas)
 
 ### Demo data
@@ -130,8 +138,9 @@ risk-analyst-dashboard/
 
 1. **Klonování repozitáře**
    ```bash
-   git clone https://github.com/username/risk-analyst-dashboard.git
-   cd risk-analyst-dashboard
+   git clone https://github.com/moziyuri/memory_map.git
+   cd memory_map
+   git checkout feature/risk-analyst
    ```
 
 2. **Instalace závislostí**
@@ -164,18 +173,28 @@ Aplikace je nasazena na:
 
 ### Web Scraping
 - Automatické sbírání dat z CHMI API
+- Integrace OpenMeteo API jako spolehlivý zdroj meteorologických dat
 - Parsování RSS feeds z českých médií
 - Analýza obsahu pro rizikové klíčová slova
+- Robustní error handling a fallback mechanismy
 
 ### GIS Analýza
 - Geografické omezení na ČR
 - Výpočet rizik v okolí dodavatelů
+- Analýza vzdálenosti od řek a simulace záplav
 - Vizualizace na interaktivní mapě
 
 ### Supply Chain Risk Management
 - Monitoring dodavatelů VW Group
 - Kategorizace podle typu dodavatele
 - Rizikové hodnocení a scoring
+- Pokročilé GIS funkce pro analýzu rizik
+
+### Deployment a Error Handling
+- Robustní database initialization s lepším error handlingem
+- Transaction management pro spolehlivé nasazení
+- Comprehensive testing suite
+- Improved CORS configuration pro frontend-backend komunikaci
 
 ## 🤝 Přispívání
 
