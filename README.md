@@ -4,6 +4,8 @@
 
 Interaktivní dashboard pro analýzu rizikových událostí v dodavatelském řetězci VW Group s využitím reálných dat z CHMI API, OpenMeteo API a RSS feeds.
 
+> DŮLEŽITÉ: Tato aplikace je prototyp / demonstrace technik a postupů. Výstupy jsou ilustrativní a neměly by být brány jako podklad pro reálné rozhodování.
+
 ## 🌟 Funkce
 
 - **Interaktivní mapa rizik** zobrazující rizikové události a dodavatele VW Group (s clusteringem značek pro přehlednost)
@@ -26,7 +28,7 @@ Interaktivní dashboard pro analýzu rizikových událostí v dodavatelském ře
 
 ## 🔗 Odkazy
 
-- **Frontend**: [https://risk-analyst-sh.streamlit.app/](https://risk-analyst-sh.streamlit.app/)
+- **Frontend (sdíletelný odkaz)**: [https://risk-analyst-sh.streamlit.app/](https://risk-analyst-sh.streamlit.app/)
 - **Backend API**: [https://risk-analyst.onrender.com](https://risk-analyst.onrender.com)
 - **API dokumentace**: [https://risk-analyst.onrender.com/docs](https://risk-analyst.onrender.com/docs)
 - **GitHub Repository**: [https://github.com/moziyuri/memory_map/tree/feature/risk-analyst](https://github.com/moziyuri/memory_map/tree/feature/risk-analyst)

@@ -270,8 +270,22 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint pro monitoring"""
-    return {"status": "healthy", "message": "Risk Analyst API is running"}
+    """Health check endpoint pro monitoring (včetně DB, neblokující)."""
+    db_ok = True
+    try:
+        conn = get_risk_db()
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    _ = cur.fetchone()
+            finally:
+                conn.close()
+        else:
+            db_ok = False
+    except Exception:
+        db_ok = False
+    return {"status": "healthy", "db": db_ok, "message": "Risk Analyst API is running"}
 
 # Definice struktury dat pro vstupní data
 class MemoryText(BaseModel):

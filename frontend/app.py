@@ -12,6 +12,8 @@ from folium.plugins import MarkerCluster
 from streamlit_folium import folium_static
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import json
 from datetime import datetime, timedelta
 import os
@@ -32,6 +34,21 @@ CZECH_BOUNDS = {
 
 # Environment variables
 BACKEND_URL = os.getenv('BACKEND_URL', 'https://risk-analyst.onrender.com')
+
+def get_http_session():
+    session = requests.Session()
+    retries = Retry(
+        total=3,
+        backoff_factor=0.6,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET", "POST"]
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+HTTP = get_http_session()
 
 # Konzistentní zobrazení hodnot
 EVENT_TYPE_LABEL = {
@@ -90,7 +107,7 @@ def sanitize_coords(lat, lon):
 def test_backend_connection():
     """Test připojení k backendu"""
     try:
-        response = requests.get(f"{BACKEND_URL}/api/health", timeout=10)
+        response = HTTP.get(f"{BACKEND_URL}/api/health", timeout=20)
         return response.status_code == 200
     except:
         return False
@@ -99,7 +116,12 @@ def test_backend_connection():
 def get_risk_events():
     """Získání rizikových událostí z API (s cachingem)"""
     try:
-        response = requests.get(f"{BACKEND_URL}/api/risks", timeout=15)
+        # Probudíme backend health pingem při cold startu
+        try:
+            HTTP.get(f"{BACKEND_URL}/api/health", timeout=20)
+        except Exception:
+            pass
+        response = HTTP.get(f"{BACKEND_URL}/api/risks", timeout=30)
         if response.status_code == 200:
             return response.json()
         else:
@@ -111,7 +133,12 @@ def get_risk_events():
 def get_suppliers():
     """Získání dodavatelů z API (s cachingem)"""
     try:
-        response = requests.get(f"{BACKEND_URL}/api/suppliers", timeout=15)
+        # Probudíme backend health pingem při cold startu
+        try:
+            HTTP.get(f"{BACKEND_URL}/api/health", timeout=20)
+        except Exception:
+            pass
+        response = HTTP.get(f"{BACKEND_URL}/api/suppliers", timeout=30)
         if response.status_code == 200:
             return response.json()
         else:
@@ -425,7 +452,6 @@ def main():
             st.metric("⚠️ Vysoké riziko", f"{stats['high_risk_suppliers']} ({stats['high_risk_percentage']:.1f}%)")
         with col4:
             st.metric("🌍 Celkem bodů na mapě", len(display_events) + len(display_suppliers))
-            st.info(f"📊 Zobrazeno: {len(display_events)} událostí + {len(display_suppliers)} dodavatelů")
         
         # Mapa
         if display_events or display_suppliers:
@@ -695,7 +721,7 @@ def main():
         st.markdown("""
         ## 🎯 Účel aplikace
         
-        **Risk Analyst Dashboard** je moderní nástroj pro monitoring a analýzu rizik v dodavatelském řetězci.
+        **Risk Analyst Dashboard** je prototyp/demonstrace. Výstupy jsou ilustrativní a nejsou určeny jako podklad pro reálné rozhodování.
         
         ### 🚀 Klíčové funkce
         
