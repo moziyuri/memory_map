@@ -714,38 +714,25 @@ if __name__ == "__main__":
 
 # Přímé připojení k risk analyst databázi
 def get_risk_db():
-    """Připojení k risk analyst databázi s vylepšeným error handlingem"""
-    import psycopg2
-    import os
-    from typing import Generator
-    
-    # Zkusíme environment variable, pak fallback
-    database_url = os.getenv('RISK_DATABASE_URL')
-    
-    if database_url:
-        print(f"✅ Používám RISK_DATABASE_URL: {database_url[:20]}...")
-        try:
-            # Úprava URL pro psycopg2 (pokud používá formát postgres://)
-            if database_url.startswith('postgres://'):
-                database_url = database_url.replace('postgres://', 'postgresql://', 1)
-                print("URL konvertováno z postgres:// na postgresql://")
-            
-            conn = psycopg2.connect(database_url, sslmode='require', connect_timeout=10)
-            print("✅ Připojení k databázi úspěšné!")
-            yield conn
-        except Exception as e:
-            print(f"❌ Chyba při připojení přes DATABASE_URL: {str(e)}")
-            raise
-    else:
-        print("⚠️ RISK_DATABASE_URL není nastavena, používám hardcoded hodnoty")
-        # Fallback na hardcoded hodnoty
-        host = "dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com"
-        port = "5432"
-        dbname = "risk_analyst"
-        user = "risk_analyst_user"
-        password = "uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf"
+    """Získá připojení k risk analyst databázi"""
+    try:
+        # Zkusíme environment variable, pak fallback
+        database_url = os.getenv('RISK_DATABASE_URL')
         
-        try:
+        if database_url:
+            print(f"🔗 Připojuji k databázi přes RISK_DATABASE_URL...")
+            # Zvýšíme timeout na 30 sekund
+            conn = psycopg2.connect(database_url, sslmode='require', connect_timeout=30)
+        else:
+            print("⚠️ RISK_DATABASE_URL není nastavena, používám hardcoded hodnoty")
+            # Fallback na hardcoded hodnoty
+            host = "dpg-d2a54tp5pdvs73acu64g-a.frankfurt-postgres.render.com"
+            port = "5432"
+            dbname = "risk_analyst"
+            user = "risk_analyst_user"
+            password = "uN3Zogp6tvoTmnjNV4owD92Nnm6UlGkf"
+            
+            # Zvýšíme timeout na 30 sekund
             conn = psycopg2.connect(
                 host=host,
                 port=port,
@@ -753,13 +740,15 @@ def get_risk_db():
                 user=user,
                 password=password,
                 sslmode='require',
-                connect_timeout=10
+                connect_timeout=30
             )
-            print("✅ Připojení k databázi úspěšné!")
-            yield conn
-        except Exception as e:
-            print(f"❌ Chyba při připojení k risk analyst databázi: {str(e)}")
-            raise
+        
+        print("✅ Připojení k databázi úspěšné!")
+        return conn
+        
+    except Exception as e:
+        print(f"❌ Chyba při připojení k databázi: {str(e)}")
+        return None
 
 # Nové Pydantic modely pro risk events
 class RiskEventCreate(BaseModel):
@@ -1943,6 +1932,14 @@ def analyze_rss_item_for_risk(title: str, description: str, feed_url: str) -> Di
         'televize', 'rozhlas', 'reklama', 'marketing', 'obchod', 'nákup', 'sleva', 'akce', 'sport', 'fotbal', 'hokej',
         'tenis', 'basketball', 'atletika', 'kultura', 'osobní', 'soukromý', 'rodina', 'dítě', 'život', 'výpověď',
         'nohavica', 'písničkář', 'dokument', 'jarek', 'ostrava', 'písničky', 'stb', 'putin', 'míří do kin',
+        
+        # Geopolitická a kulturní témata - úplně vyloučit
+        'politika', 'politický', 'volby', 'prezident', 'vláda', 'parlament', 'senát', 'poslanec', 'ministr',
+        'diplomat', 'mezinárodní', 'zahraničí', 'rusko', 'ukrajina', 'nato', 'eu', 'unie', 'brexit',
+        'protest', 'demonstrace', 'manifestace', 'stávka', 'odbor', 'aktivista', 'ekolog', 'greenpeace',
+        'kultura', 'umění', 'literatura', 'film', 'hudba', 'divadlo', 'galerie', 'muzeum', 'výstava',
+        'osobnost', 'celebrita', 'herec', 'herečka', 'zpěvák', 'zpěvačka', 'umělec', 'spisovatel',
+        'historie', 'historický', 'výročí', 'památka', 'památník', 'tradice', 'zvyk', 'svátek',
         
         # Jasně nepodstatné - osobní nehody bez dopadu na infrastrukturu
         'řidič', 'auto', 'nehoda', 'motorkář', 'kombajn', 'montér', 'stožár', 'nemocnice', 'přežil', 'nepřežil',

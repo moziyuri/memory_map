@@ -322,15 +322,16 @@ $$ LANGUAGE plpgsql;
         
         for supplier in sample_suppliers:
             try:
-                # Zkusíme vložit dodavatele s ON CONFLICT DO NOTHING
-                cur.execute("""
-                    INSERT INTO vw_suppliers (name, location, category, risk_level)
-                    VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
-                    ON CONFLICT (name) DO NOTHING
-                """, supplier)
+                # Nejdříve zkontrolujeme, zda dodavatel již existuje
+                cur.execute("SELECT COUNT(*) FROM vw_suppliers WHERE name = %s", (supplier[0],))
+                exists = cur.fetchone()[0] > 0
                 
-                # Zkontrolujeme, zda byl řádek skutečně vložen
-                if cur.rowcount > 0:
+                if not exists:
+                    # Vložíme nového dodavatele
+                    cur.execute("""
+                        INSERT INTO vw_suppliers (name, location, category, risk_level)
+                        VALUES (%s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s)
+                    """, supplier)
                     suppliers_added += 1
                 else:
                     suppliers_skipped += 1
