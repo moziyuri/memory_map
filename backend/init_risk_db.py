@@ -292,6 +292,13 @@ $$ LANGUAGE plpgsql;
             ("Lear Body Parts Zlín", 49.2264, 17.6683, "body_parts", "low")  # Zlín
         ]
         
+        # Nejdříve přidáme UNIQUE constraint pokud neexistuje
+        try:
+            cur.execute("ALTER TABLE vw_suppliers ADD CONSTRAINT vw_suppliers_name_unique UNIQUE (name);")
+            print("✅ UNIQUE constraint přidán na name sloupec")
+        except Exception as e:
+            print(f"ℹ️ UNIQUE constraint již existuje nebo nelze přidat: {str(e)}")
+        
         for supplier in sample_suppliers:
             try:
                 cur.execute("""

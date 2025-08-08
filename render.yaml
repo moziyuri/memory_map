@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: memory-map-risk-analyst
+    name: risk-analyst
     env: python
     plan: free
     buildCommand: |

@@ -30,7 +30,7 @@ CZECH_BOUNDS = {
 }
 
 # Environment variables
-BACKEND_URL = os.getenv('BACKEND_URL', 'https://risk-analyst-backend.onrender.com')
+BACKEND_URL = os.getenv('BACKEND_URL', 'https://risk-analyst.onrender.com')
 
 def is_in_czech_republic(lat, lon):
     """Kontrola, zda bod leží v České republice"""

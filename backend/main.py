@@ -159,6 +159,11 @@ def get_db():
 async def root():
     return {"message": "MemoryMap API is running"}
 
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint pro monitoring"""
+    return {"status": "healthy", "message": "Risk Analyst API is running"}
+
 # Definice struktury dat pro vstupní data
 class MemoryText(BaseModel):
     text: str  # Text vzpomínky
